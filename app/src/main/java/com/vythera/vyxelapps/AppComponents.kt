@@ -766,6 +766,7 @@ fun HomeSourceChipsRow(
 fun FeaturedCard(apps: List<GitHubRepo>, onAppClick: (GitHubRepo) -> Unit) {
     if (apps.isEmpty()) return
     val t          = LocalTheme.current
+    val s          = LocalStrings.current
     val context    = LocalContext.current
     val featApps   = remember(apps) { apps.shuffled().take(5) }
     val pagerState = rememberPagerState(pageCount = { featApps.size })
@@ -857,18 +858,10 @@ fun FeaturedCard(apps: List<GitHubRepo>, onAppClick: (GitHubRepo) -> Unit) {
                                 )
                             }
                         }
-                        // M3 Expressive pill button — opens html_url in browser
-                        val buttonLabel = when (repo.source) {
-                            AppSource.GITHUB   -> "View on GitHub"
-                            AppSource.GITLAB   -> "View on GitLab"
-                            AppSource.FDROID   -> "View on F-Droid"
-                            AppSource.CODEBERG -> "View on Codeberg"
-                            AppSource.FLATHUB  -> "View on Flathub"
-                            AppSource.WINGET   -> "View on Winget"
-                            AppSource.IZZY     -> "View on IzzyOnDroid"
-                            AppSource.ZEALOT   -> "View on Zealot"
-                            null               -> "View App"
-                        }
+                        // M3 Expressive pill button — opens html_url in browser.
+                        // d.ii.iii: label is source-agnostic (canonical unified catalog,
+                        // no source-branded UI) — reuses the existing, previously-unused
+                        // s.openInBrowser string rather than adding a new one.
                         Button(
                             onClick = {
                                 if (repo.html_url.isNotEmpty()) {
@@ -885,7 +878,7 @@ fun FeaturedCard(apps: List<GitHubRepo>, onAppClick: (GitHubRepo) -> Unit) {
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                             modifier       = Modifier.height(34.dp)
                         ) {
-                            Text(buttonLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            Text(s.openInBrowser, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.width(4.dp))
                             Icon(
                                 Icons.AutoMirrored.Rounded.ArrowForward,
@@ -2828,16 +2821,9 @@ fun AppDetailScreen(
                         else -> ""
                     }
                     if (viewUrl.isNotBlank()) {
-                        val sourceLabel = when (repo.source) {
-                            AppSource.GITLAB   -> "GitLab"
-                            AppSource.CODEBERG -> "Codeberg"
-                            AppSource.FDROID   -> "F-Droid"
-                            AppSource.IZZY     -> "IzzyOnDroid"
-                            AppSource.FLATHUB  -> "Flathub"
-                            AppSource.WINGET   -> "Winget"
-                            AppSource.ZEALOT   -> "Zealot"
-                            else               -> "GitHub"
-                        }
+                        // d.ii.iii: source-agnostic label (canonical unified catalog,
+                        // no source-branded UI) — reuses s.openInBrowser, same as
+                        // FeaturedCard's pill button.
                         FilledTonalButton(
                             onClick  = {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(viewUrl)))
@@ -2849,7 +2835,7 @@ fun AppDetailScreen(
                         ) {
                             Icon(Icons.Rounded.OpenInBrowser, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("View on $sourceLabel", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                            Text(s.openInBrowser, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
