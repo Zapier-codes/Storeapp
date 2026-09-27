@@ -63,7 +63,16 @@ data class GitHubRepo(
     val updated_at: String = "",
     val source: AppSource? = AppSource.GITHUB,
     val apkUrl: String = "",
-    val cdnVersion: String = ""
+    val cdnVersion: String = "",
+    /** Source-claimed SHA-256 of the APK bytes -- `1.a.iv.zi`. Checked by `InstallGateway`/
+     *  `Verifier` (`1.b.i.zi`/`1.b.i.zo`) at install time. `null` for every source that doesn't
+     *  supply one -- today that's six of the seven; only Zealot's `ZealotVersion.sha256`
+     *  (`ZealotEntry.toUnifiedRepo()`) populates this, and only ever via the pipeline `1.a.ii.zi`'s
+     *  signature verification already gates (`ZealotClient.resolveVerifiedIndex()` -> `parseZealotEntries()`
+     *  -> `toUnifiedRepo()` is the only path that ever produces an `AppSource.ZEALOT` `GitHubRepo`). */
+    val claimedSha256: String? = null,
+    /** Source-claimed signing-certificate fingerprint -- same gating and same "null unless Zealot" posture as [claimedSha256]. */
+    val claimedSigningFingerprint: String? = null
 )
 data class RepoOwner(val login: String = "", val avatar_url: String = "")
 data class SearchResponse(val items: List<GitHubRepo> = emptyList())
@@ -1996,7 +2005,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                 @Suppress("DEPRECATION")
                                 ctx.packageManager.getPackageArchiveInfo(outFile.absolutePath, 0)?.packageName
                             } catch (_: Exception) { null }
-                            val installOutcome = InstallGateway.install(ctx, outFile)
+                            val installOutcome = InstallGateway.install(ctx, outFile, repo.claimedSha256, repo.claimedSigningFingerprint)
                             if (installOutcome is InstallOutcome.Blocked) {
                                 updateInstall(repo.id) { copy(downloadProgress = null, downloadId = null, error = installOutcome.reason) }
                                 break

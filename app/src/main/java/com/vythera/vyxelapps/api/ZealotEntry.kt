@@ -156,6 +156,8 @@ fun ZealotEntry.toUnifiedRepo(): GitHubRepo {
         updated_at       = updated_at,
         source           = AppSource.ZEALOT,
         apkUrl           = latest?.download_url ?: "",
-        cdnVersion       = latest?.version_name ?: ""
+        cdnVersion       = latest?.version_name ?: "",
+        claimedSha256             = latest?.sha256,
+        claimedSigningFingerprint = latest?.signing_fingerprint
     )
 }
