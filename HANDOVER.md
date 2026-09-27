@@ -63,4 +63,52 @@ This repo is the on-device client in the same program as `D-Store` (public store
 
 ## 3. Handoff process
 
-Same as D-Store's: on finishing a leaf, flip its `[ ]` to `[x]`, note what shipped and what's flagged forward, and if a leaf can't finish in one session mark it `[~]` with a note on what's left rather than committing partial work as done.
+Same as D-Store's — but inlined here in full, not just referenced, because a
+session (this one) previously read only the one-line summary that used to be
+here, skipped opening D-Store's `HANDOVER.md` §3 for the actual mechanics, and
+handed off wrong git commands as a result (plain `git diff` + `git apply`
+instead of `git format-patch` + `git am`, and apply/push commands with no
+concrete paths in them). Read this section itself from now on; don't defer to
+D-Store's copy for the mechanics.
+
+0. **Check upstream first:** `git fetch origin` and compare against
+   `origin/main`. If origin has moved since the local clone/session was last
+   synced, `git rebase origin/main` before starting the leaf and before
+   generating any patch — a patch built against a stale base can fail to
+   apply with `git am` even when its content is logically identical to what's
+   already there.
+1. **Do the one assigned leaf task** (Section 1 — nothing more).
+2. **Update this file**: flip the completed leaf's `[ ]` to `[x]`, add a
+   **Done note** on what shipped and what's flagged forward. If a leaf can't
+   finish in one session, do not commit partial work as done — mark it `[~]`
+   instead, with a note on exactly what's left, and commit with a `WIP:`
+   prefix rather than the plain leaf-path message below.
+3. **Commit** the code change and the `HANDOVER.md` update **together, in one
+   commit**, with a message that starts with the leaf path:
+   ```
+   git add -A
+   git commit -m "1.a.i.zo: add ZealotClient index fetch"
+   ```
+4. **Generate the patch** as a proper `git format-patch` output (an mbox-style
+   file `git am` can apply) — **never** a plain `git diff`, which drops the
+   commit metadata `git am` needs and isn't what step 6 below applies:
+   ```
+   git format-patch -1 HEAD -o patches/
+   ```
+   For a handoff spanning several commits, combine them into one file instead
+   of handing off several: `git format-patch origin/main --stdout > patches/000X-<description>.patch`.
+   Always hand off exactly one patch file, never more than one.
+5. **Hand the patch file to the user** — never push directly unless
+   explicitly told to. The patch is the deliverable that closes the session.
+6. **Applying it** (next session, or the user, on their own machine) needs
+   concrete paths, not bare filenames — state the actual repo path and the
+   actual patch path/filename every time, e.g.:
+   ```
+   cd ~/Storeapp
+   git am ~/storage/downloads/0001-1.a.i.zo-add-ZealotClient-index-fetch.patch
+   git push origin main
+   ```
+   It's `git am` here, not `git apply` — `git apply` doesn't work on a
+   `format-patch` file's mbox format the same way and won't carry the commit
+   metadata through. This repo's default branch is `main` (not D-Store's
+   `master`) — don't copy that detail across repos without checking.
