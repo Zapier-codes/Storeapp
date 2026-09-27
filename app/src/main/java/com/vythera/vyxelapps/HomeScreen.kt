@@ -703,129 +703,92 @@ fun HomeTab(
                             }
                         }
                     }
-                    item(key = "sources") {
-                        AnimatedVisibility(
-                            visible = state.selectedSource == null,
-                            enter   = expandVertically(tween(380)) + fadeIn(tween(280)),
-                            exit    = slideOutVertically(tween(240)) { -it / 3 } + shrinkVertically(tween(300)) + fadeOut(tween(200))
-                        ) {
-                            SourcesRow(
-                                gitlabCount   = state.gitlabApps.size,
-                                codebergCount = state.codebergApps.size,
-                                fdroidCount   = state.fdroidApps.size,
-                                flathubCount  = state.flathubApps.size,
-                                wingetCount   = state.wingetApps.size,
-                                izzyCount     = state.izzyApps.size,
-                                onSourceClick = { source ->
-                                    viewModel.openSourceBrowse(source)
-                                    onSeeAll()
-                                }
-                            )
+                    // d.ii.zi: per-source shelves removed as user-facing UI (SourcesRow tiles
+                    // and the source-keyed `when` branches below are gone) — canonical rows
+                    // now render unconditionally, regardless of `state.selectedSource`.
+                    // `AppSource` itself, `state.selectedSource`, and the six per-source app
+                    // lists (`state.fdroidApps` etc.) are untouched: still real data, still
+                    // read by `openSourceBrowse`/search/`zealotFirst`/`UpdateCheckWorker` —
+                    // this is presentation-layer only, per this leaf's own scope.
+                    if (state.recommendations.isNotEmpty()) {
+                        item(key = "recs") {
+                            AppRow(strings.sectionRecommended, state.recommendations, installed) { onAppClick(it) }
                         }
                     }
-                    // App cards filtered by the selected source chip
-                    when (state.selectedSource) {
-                        AppSource.FDROID -> item(key = "fdroid_apps") {
-                            AppRow("F-Droid Apps", state.fdroidApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    item(key = "r1") {
+                        // 1.a.iii.zi: Zealot's verified apps go first, prepended ahead
+                        // of `trending` — read fresh here on every recomposition
+                        // (rather than merged once at write time in the ViewModel,
+                        // which raced against `trending` itself being reassigned later
+                        // in the same load), and never entering `trending`'s own
+                        // popularity-based ordering.
+                        val trendingWithZealot = remember(state.zealotApps, state.trending) {
+                            (state.zealotApps + state.trending).distinctBy { it.id }
                         }
-                        AppSource.GITLAB -> item(key = "gitlab_apps") {
-                            AppRow("GitLab Apps", state.gitlabApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                        }
-                        AppSource.CODEBERG -> item(key = "codeberg_apps") {
-                            AppRow("Codeberg Apps", state.codebergApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                        }
-                        AppSource.FLATHUB -> item(key = "flathub_apps") {
-                            AppRow("Flathub Apps", state.flathubApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                        }
-                        AppSource.WINGET -> item(key = "winget_apps") {
-                            AppRow("Winget Apps", state.wingetApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                        }
-                        AppSource.IZZY -> item(key = "izzy_apps") {
-                            AppRow("IzzyOnDroid Apps", state.izzyApps, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                        }
-                        else -> {
-                            // null (All Sources) or GITHUB — show all GitHub-backed rows
-                            if (state.recommendations.isNotEmpty()) {
-                                item(key = "recs") {
-                                    AppRow(strings.sectionRecommended, state.recommendations, installed) { onAppClick(it) }
-                                }
-                            }
-                            item(key = "r1") {
-                                // 1.a.iii.zi: Zealot's verified apps go first, prepended ahead
-                                // of `trending` — read fresh here on every recomposition
-                                // (rather than merged once at write time in the ViewModel,
-                                // which raced against `trending` itself being reassigned later
-                                // in the same load), and never entering `trending`'s own
-                                // popularity-based ordering.
-                                val trendingWithZealot = remember(state.zealotApps, state.trending) {
-                                    (state.zealotApps + state.trending).distinctBy { it.id }
-                                }
-                                AppRow(strings.sectionTrending, trendingWithZealot, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r2") {
-                                AppRow(strings.sectionMedia, state.media, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r3") {
-                                AppRow(strings.sectionTools, state.tools, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r4") {
-                                AppRow(strings.sectionGames, state.games, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r5") {
-                                AppRow(strings.sectionBrowsers, state.browsers, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r6") {
-                                AppRow(strings.sectionProductivity, state.productivity, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r7") {
-                                AppRow(strings.sectionSecurity, state.security, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r8") {
-                                AppRow(strings.sectionDevTools, state.devtools, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r9") {
-                                AppRow(strings.sectionPhotoVideo, state.photoVideo, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r10") {
-                                AppRow(strings.sectionMusic, state.music, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r11") {
-                                AppRow(strings.sectionFinance, state.finance, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r12") {
-                                AppRow(strings.sectionEducation, state.education, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r13") {
-                                AppRow(strings.sectionFitness, state.fitness, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r14") {
-                                AppRow(strings.sectionArtDesign, state.artDesign, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r15") {
-                                AppRow(strings.sectionNews, state.news, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r16") {
-                                AppRow(strings.sectionSocial, state.social, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r17") {
-                                AppRow(strings.sectionCloudStorage, state.cloudStorage, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            item(key = "r18") {
-                                AppRow(strings.sectionCooking, state.cooking, installed, refreshToken = state.refreshToken) { onAppClick(it) }
-                            }
-                            if (state.isLoadingMore) {
-                                item(key = "load_more") {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().padding(20.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = theme.accent,
-                                            modifier = Modifier.size(24.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                    }
-                                }
+                        AppRow(strings.sectionTrending, trendingWithZealot, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r2") {
+                        AppRow(strings.sectionMedia, state.media, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r3") {
+                        AppRow(strings.sectionTools, state.tools, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r4") {
+                        AppRow(strings.sectionGames, state.games, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r5") {
+                        AppRow(strings.sectionBrowsers, state.browsers, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r6") {
+                        AppRow(strings.sectionProductivity, state.productivity, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r7") {
+                        AppRow(strings.sectionSecurity, state.security, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r8") {
+                        AppRow(strings.sectionDevTools, state.devtools, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r9") {
+                        AppRow(strings.sectionPhotoVideo, state.photoVideo, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r10") {
+                        AppRow(strings.sectionMusic, state.music, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r11") {
+                        AppRow(strings.sectionFinance, state.finance, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r12") {
+                        AppRow(strings.sectionEducation, state.education, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r13") {
+                        AppRow(strings.sectionFitness, state.fitness, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r14") {
+                        AppRow(strings.sectionArtDesign, state.artDesign, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r15") {
+                        AppRow(strings.sectionNews, state.news, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r16") {
+                        AppRow(strings.sectionSocial, state.social, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r17") {
+                        AppRow(strings.sectionCloudStorage, state.cloudStorage, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    item(key = "r18") {
+                        AppRow(strings.sectionCooking, state.cooking, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                    }
+                    if (state.isLoadingMore) {
+                        item(key = "load_more") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = theme.accent,
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
                             }
                         }
                     }
