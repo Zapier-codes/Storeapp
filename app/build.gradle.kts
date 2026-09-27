@@ -21,6 +21,28 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Packaging-identity-only product flavors -- leaf `1.c.i.zo`. One flavor per distributable
+    // tenant (`spec/tenant-config-schema.md`'s `tenant_id`), covering ONLY what Android makes
+    // genuinely build-time-fixed: `applicationId`, launcher name, launcher icon. Everything else
+    // -- business logic, UI, the data layer, and in-app branding (`TenantConfig.branding`,
+    // `1.c.ii.zi`, still open) -- stays one codebase, one path; flavors select packaging metadata,
+    // never behavior (`HANDOVER.md`'s "Multi-tenant model" decision).
+    flavorDimensions += "tenant"
+    productFlavors {
+        // The seed/default tenant -- spec's `is_default_tenant: true`. Deliberately overrides
+        // nothing: no `applicationId`, no `resValue`, no flavor-specific `res/` folder. This
+        // flavor's entire point is to reproduce today's pre-multi-tenant identity byte-for-byte,
+        // so it inherits `applicationId`/`app_name`/launcher icon straight from `defaultConfig`
+        // and the main source set rather than restating them here, where a typo could quietly
+        // diverge from what's already shipping. A future white-label tenant's own flavor block is
+        // where `applicationId` gets overridden and a `src/<flavor>/res/` folder supplies its own
+        // `app_name`/launcher icon -- this flavor is the "nothing to see here" baseline that
+        // pattern gets added alongside, not built speculatively ahead of an actual second tenant.
+        create("default") {
+            dimension = "tenant"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
