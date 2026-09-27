@@ -13,22 +13,40 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * Runtime `TenantConfig` object — leaf `1.c.ii.zi`. Fetched on launch, cached locally
- * with a TTL and a last-known-good fallback on failed fetch, reusing (not reinventing)
- * the two caching ideas this repo already has in two different places rather than
- * combining them nowhere until now:
+ * Runtime `TenantConfig` object — leaves `1.c.ii.zi`/`1.c.ii.zo`. Fetched on launch,
+ * cached locally with a TTL and a last-known-good fallback on failed fetch, reusing
+ * (not reinventing) the caching ideas this repo already has in two different places:
  *   - `MetadataClient.ensureIndex()`'s TTL gate (`AppData.kt`'s sibling `api/MetadataClient.kt`)
  *     — a fresh-enough cache means "don't hit the network at all this launch."
  *   - `ZealotClient.resolveVerifiedIndex()`'s (`AppData.kt`) last-known-good fallback — ANY
- *     fetch failure serves whatever was last committed, with no TTL gate on the fallback
- *     read itself (a stale record beats no record).
- * This leaf does **not** verify anything — no signature check on the fetched payload.
- * That's `1.c.ii.zo`, explicitly held until this leaf lands, reusing `1.a.ii.zi`'s
- * pinned-key/rotation-window/anti-rollback posture (`ZealotTrust.kt`) rather than a
- * second trust mechanism. Until `1.c.ii.zo` wires a `Verifier`-equivalent in front of
- * `refresh()` below, an unsigned/untrusted `configUrl` response is accepted as-is —
- * acceptable for this leaf only because `configUrl` itself has no real value set
- * anywhere yet (see `configUrl` below), so nothing untrusted is actually fetched today.
+ *     fetch or verification failure serves whatever was last committed, with no TTL gate
+ *     on the fallback read itself (a stale-but-verified record beats no record).
+ *
+ * `1.c.ii.zo`'s Ed25519 signature/trust verification (this session) reuses `1.a.ii.zi`'s
+ * whole posture rather than a second trust mechanism, per this leaf's own stated scope
+ * ("tenant config is at least as security-sensitive as the catalog index"): the same
+ * pinned key list (`ZealotTrust.PINNED_KEYS`), the same free functions
+ * (`verifySignature`/`isRollback`/`isExpired`, `ZealotTrust.kt`), and the same
+ * fetch→verify→commit-or-fallback shape `ZealotClient.resolveVerifiedIndex` already
+ * uses. **Deliberately the identical key, not a second tenant-config-specific one:**
+ * this program has one signer (Zealot) publishing both the catalog index and (once
+ * `1.c.i.zi`'s open decision #2 is resolved) tenant-config records, so a single trust
+ * root is the correct model, not an accident of reuse — a compromised or rotated key
+ * needs one rotation window (`PINNED_KEYS`), not two to keep in sync.
+ * `TenantConfigData`'s own `schema_version` (fixed at `1`, `spec/tenant-config-schema.md`)
+ * is a fully separate version number from `ZealotTrust.SUPPORTED_SCHEMA_VERSION`
+ * (fixed at `2`, the *catalog index's* schema) — two different documents signed by the
+ * same key, each independently versioned; this file checks its own constant, never that one.
+ *
+ * **Sidecar signature convention (a real decision this leaf makes, not assumed
+ * elsewhere):** neither `spec/tenant-config-schema.md` nor `tenant-config.schema.json`
+ * defines how a signature travels with a TenantConfig payload — there is no publisher
+ * yet to have already fixed a convention (`spec/tenant-config-schema.md` "Open
+ * decisions" #2, Zealot Task 37b/37c, still open). This leaf mirrors the catalog
+ * index's own `index.json`/`index.json.sig` pairing exactly: `configUrl` names the
+ * JSON payload, the signature is fetched from `configUrl + ".sig"`. Flagged here so
+ * whichever leaf eventually builds the Zealot-side publisher matches this, not a
+ * convention invented independently on that side.
  *
  * Shape mirrors `spec/tenant-config-schema.md` v1 — every field mapped here is a field
  * that document defines; nothing invented. `logo_sha256`/full-`branding` fields are
@@ -48,7 +66,10 @@ data class TenantBranding(
  * the default/seed tenant record with this precise value — not a placeholder, not a
  * different CDN — is what makes "default install behavior does not change, it just
  * moves from a compile-time constant to tenant-zero's config record" (`HANDOVER.md`,
- * `1.c.ii.zi`) concretely true rather than merely asserted.
+ * `1.c.ii.zi`) concretely true rather than merely asserted. The compiled-in default
+ * record is trusted implicitly, same as before this leaf — it's never fetched over the
+ * network, so `1.c.ii.zo`'s signature check has nothing to verify it against and never
+ * runs against it; verification only gates a *fetched* record replacing this one.
  */
 const val DEFAULT_CDN_BASE = "https://nikhilkain.github.io/appstore-metadata"
 
@@ -65,25 +86,32 @@ data class TenantConfigData(
     @SerializedName("is_default_tenant")      val isDefaultTenant: Boolean = true
 )
 
+/** Matches `tenant-config.schema.json`'s `schema_version.const`. A separate constant from `ZealotTrust.SUPPORTED_SCHEMA_VERSION` on purpose — different document, independently versioned, same signer. */
+const val TENANT_CONFIG_SCHEMA_VERSION: Int = 1
+
 object TenantConfig {
 
     /**
-     * Per-tenant fetch endpoint. Mirrors `ZealotClient.baseUrl`'s own posture exactly:
-     * blank/unset means "no live source configured yet," not an error — there is no
-     * `TenantConfig` publisher anywhere in this program today (`spec/tenant-config-schema.md`
-     * "Open decisions" #2 — Zealot Task 37b/37c, still open), so this stays blank in
-     * practice until that lands. `current` must therefore always resolve to *something*
-     * valid on its own — see below — never `null`, since `MetadataManager.init` (this
-     * same leaf) needs an always-available `cdnBase` on the very first frame.
+     * Per-tenant fetch endpoint (the JSON payload; its signature is fetched from
+     * `configUrl + ".sig"`, see this file's header comment). Mirrors `ZealotClient.baseUrl`'s
+     * own posture exactly: blank/unset means "no live source configured yet," not an
+     * error — there is no `TenantConfig` publisher anywhere in this program today
+     * (`spec/tenant-config-schema.md` "Open decisions" #2 — Zealot Task 37b/37c, still
+     * open), so this stays blank in practice until that lands. `current` must
+     * therefore always resolve to *something* valid on its own — see below — never
+     * `null`, since `MetadataManager.init` needs an always-available `cdnBase` on the
+     * very first frame.
      */
     @Volatile var configUrl: String = ""
 
     @Volatile private var _current: TenantConfigData = TenantConfigData()
     val current: TenantConfigData get() = _current
 
-    private const val PREFS      = "tenant_config_cache"
-    private const val KEY_JSON   = "last_good_config"
-    private const val KEY_TS     = "last_good_ts"
+    private const val PREFS            = "tenant_config_cache"
+    private const val KEY_JSON         = "last_good_config"
+    private const val KEY_TS           = "last_good_ts"
+    private const val KEY_SEQUENCE     = "last_sequence"
+    private const val KEY_GENERATED_AT = "last_generated_at"
 
     /** Same TTL `MetadataClient` already uses for its own index cache — not a fresh number invented for this leaf. */
     private const val CACHE_TTL = 60 * 60 * 1000L
@@ -120,32 +148,68 @@ object TenantConfig {
         refresh(context)
     }
 
+    /** This device's last-committed anti-rollback state, for `isRollback`'s `last` argument — same shape/role as `ZealotClient.lastState`, kept in this object's own prefs store since a device resolves one tenant's sequence track at a time, not a shared one with the catalog index. */
+    private fun lastState(context: Context): IndexState? {
+        val p   = prefs(context)
+        val seq = p.getInt(KEY_SEQUENCE, -1)
+        val gen = p.getString(KEY_GENERATED_AT, null)
+        return if (seq >= 0 && gen != null) IndexState(seq, gen) else null
+    }
+
     /**
-     * Unconditional fetch attempt. On success, `current` and the on-disk cache both
-     * advance together. On ANY failure (unset `configUrl`, network error, non-2xx,
-     * unparsable JSON, unsupported `schema_version`) `current` is left exactly as
-     * `init()`'s synchronous load already set it — the last-known-good record, or the
-     * compiled-in default tenant if nothing has ever been cached — same "every
-     * rejection reason collapses to the same outcome" posture `ZealotClient.resolveVerifiedIndex`
-     * already uses for its own fetch/verify step.
+     * Unconditional fetch-and-verify attempt: fetches `configUrl` + its `.sig` sidecar
+     * (in parallel, same shape `ZealotClient.fetchIndex` already uses), then runs the
+     * exact same signature → schema-version → expiry → anti-rollback gauntlet
+     * `ZealotClient.validate` runs for the catalog index, reusing `ZealotTrust.kt`'s
+     * free functions rather than re-implementing any of the four checks. `current` and
+     * the on-disk cache only advance together, and only once every check passes.
+     *
+     * On ANY failure — unset `configUrl`, network error on either fetch, non-2xx on
+     * either, unparsable JSON, wrong `schema_version`, bad/missing signature, expired,
+     * or rolled back — `current` is left exactly as `init()`'s synchronous load already
+     * set it: the last-known-good *verified* record, or the compiled-in default tenant
+     * if nothing has ever verified on this device. Every rejection reason collapses to
+     * the same outcome, same posture `ZealotClient.resolveVerifiedIndex` already uses.
      */
     suspend fun refresh(context: Context) = withContext(Dispatchers.IO) {
         val url = configUrl.trim()
         if (url.isEmpty()) return@withContext
         try {
-            val resp = http.newCall(Request.Builder().url(url).build()).execute()
-            resp.use { r ->
-                if (!r.isSuccessful) return@withContext
-                val json = r.body?.string() ?: return@withContext
-                val parsed = try {
-                    gson.fromJson(json, TenantConfigData::class.java)
-                } catch (_: Exception) { null } ?: return@withContext
-                if (parsed.schemaVersion != 1) return@withContext
-                _current = parsed
-                prefs(context).edit()
-                    .putString(KEY_JSON, json)
-                    .putLong(KEY_TS, System.currentTimeMillis())
-                    .apply()
+            val configDeferred = kotlinx.coroutines.async {
+                http.newCall(Request.Builder().url(url).build()).execute()
+            }
+            val sigDeferred = kotlinx.coroutines.async {
+                http.newCall(Request.Builder().url("$url.sig").build()).execute()
+            }
+            val configResp = configDeferred.await()
+            val sigResp     = sigDeferred.await()
+            configResp.use { cResp ->
+                sigResp.use { sResp ->
+                    if (!cResp.isSuccessful || !sResp.isSuccessful) return@withContext
+                    val json    = cResp.body?.string() ?: return@withContext
+                    val sigText = sResp.body?.string()?.trim() ?: return@withContext
+
+                    val parsed = try {
+                        gson.fromJson(json, TenantConfigData::class.java)
+                    } catch (_: Exception) { null } ?: return@withContext
+                    if (parsed.schemaVersion != TENANT_CONFIG_SCHEMA_VERSION) return@withContext
+
+                    // 1.c.ii.zo: signature, expiry, and anti-rollback -- same checks,
+                    // same free functions, `ZealotClient.validate` already runs for the
+                    // catalog index (`ZealotTrust.kt`), never re-implemented here.
+                    if (verifySignature(json, sigText) == null) return@withContext
+                    if (isExpired(parsed.expiresAt)) return@withContext
+                    val candidate = IndexState(parsed.sequence, parsed.generatedAt)
+                    if (isRollback(candidate, lastState(context))) return@withContext
+
+                    _current = parsed
+                    prefs(context).edit()
+                        .putString(KEY_JSON, json)
+                        .putLong(KEY_TS, System.currentTimeMillis())
+                        .putInt(KEY_SEQUENCE, candidate.sequence)
+                        .putString(KEY_GENERATED_AT, candidate.generatedAt)
+                        .apply()
+                }
             }
         } catch (_: Exception) {
             Log.w("TenantConfig", "refresh failed, keeping last-known-good/default")
