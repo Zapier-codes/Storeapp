@@ -1295,6 +1295,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val savedSettings = prefs.loadSettings()
         RetrofitClient.authToken = savedSettings.githubToken
+        // 1.c.ii.zi: must run before MetadataManager.init(ctx) -- TenantConfig.init()
+        // synchronously loads any cached tenant record (or leaves the compiled-in
+        // default) so MetadataManager reads the right cdnBase on this very first frame,
+        // then kicks off its own background refresh attempt.
+        com.vythera.vyxelapps.api.TenantConfig.init(ctx)
         MetadataManager.init(ctx)
         state = state.copy(
             settings           = savedSettings,
