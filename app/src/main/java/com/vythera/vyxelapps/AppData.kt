@@ -16,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -1997,12 +1996,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                 @Suppress("DEPRECATION")
                                 ctx.packageManager.getPackageArchiveInfo(outFile.absolutePath, 0)?.packageName
                             } catch (_: Exception) { null }
-                            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", outFile)
-                            ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "application/vnd.android.package-archive")
-                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            })
+                            val installOutcome = InstallGateway.install(ctx, outFile)
+                            if (installOutcome is InstallOutcome.Blocked) {
+                                updateInstall(repo.id) { copy(downloadProgress = null, downloadId = null, error = installOutcome.reason) }
+                                break
+                            }
                             updateInstall(repo.id) { copy(downloadProgress = null, downloadId = null, packageName = pkg) }
                             val tag = state.installStates[repo.id]?.release?.tag_name ?: "unknown"
                             recordInstall(repo, tag, outFile.absolutePath, pkg ?: "")
@@ -2356,17 +2354,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun rollbackTo(entry: InstallHistoryEntry) {
-        try {
-            val file = java.io.File(entry.apkPath)
-            if (!file.exists()) { state = state.copy(error = "APK file not found for rollback"); return }
-            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
-            ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        } catch (e: Exception) {
-            state = state.copy(error = "Rollback failed: ${e.message}")
+        val file = java.io.File(entry.apkPath)
+        if (!file.exists()) { state = state.copy(error = "APK file not found for rollback"); return }
+        viewModelScope.launch {
+            try {
+                val outcome = InstallGateway.install(ctx, file)
+                if (outcome is InstallOutcome.Blocked) {
+                    state = state.copy(error = "Rollback blocked: ${outcome.reason}")
+                }
+            } catch (e: Exception) {
+                state = state.copy(error = "Rollback failed: ${e.message}")
+            }
         }
     }
 
