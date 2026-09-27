@@ -647,6 +647,97 @@ object ZealotClient {
             null // network error -- caller falls back to its own cache, same as zealot.ts
         }
     }
+
+    // ── Verify + last-good-index cache (1.a.ii.zi) ──────────────────────────────
+    // Everything below consumes com.vythera.vyxelapps.api.ZealotTrust's pure functions rather
+    // than duplicating any check here -- this object never itself decides whether a signature is
+    // valid, only orchestrates fetch → verify → persist/fallback around that decision.
+
+    /**
+     * Minimal envelope -- only the fields needed to verify trust (schema_version/generated_at/
+     * sequence/expires_at). Full `RawApp`/`apps` parsing into `GitHubRepo` entries is `1.a.ii.zo`'s
+     * job (`ZealotEntry.toUnifiedRepo()`), which re-parses this same verified text for the fields
+     * this leaf deliberately doesn't read -- kept separate so nothing here can be mistaken for
+     * having looked at (let alone trusted) any actual app data before the signature check passes.
+     */
+    data class IndexEnvelope(
+        val schema_version: Int    = -1,
+        val generated_at  : String = "",
+        val sequence      : Int    = -1,
+        val expires_at    : String = ""
+    )
+
+    private const val TRUST_PREFS      = "zealot_trust_state"
+    private const val KEY_SEQUENCE     = "last_sequence"
+    private const val KEY_GENERATED_AT = "last_generated_at"
+    private const val KEY_CACHED_INDEX = "last_good_index"
+    private const val KEY_CACHED_SIG   = "last_good_sig"
+
+    private fun trustPrefs(context: Context) =
+        context.applicationContext.getSharedPreferences(TRUST_PREFS, Context.MODE_PRIVATE)
+
+    private fun lastState(context: Context): com.vythera.vyxelapps.api.IndexState? {
+        val prefs = trustPrefs(context)
+        val seq = prefs.getInt(KEY_SEQUENCE, -1)
+        val gen = prefs.getString(KEY_GENERATED_AT, null)
+        return if (seq >= 0 && gen != null) com.vythera.vyxelapps.api.IndexState(seq, gen) else null
+    }
+
+    /** The point of no return: only call once `validate()` has cleared every check. Advances the anti-rollback baseline and overwrites the last-good-index cache together, atomically, so the two can never disagree with each other. */
+    private fun commitState(context: Context, envelope: IndexEnvelope, indexText: String, signatureText: String) {
+        trustPrefs(context).edit()
+            .putInt(KEY_SEQUENCE, envelope.sequence)
+            .putString(KEY_GENERATED_AT, envelope.generated_at)
+            .putString(KEY_CACHED_INDEX, indexText)
+            .putString(KEY_CACHED_SIG, signatureText)
+            .apply()
+    }
+
+    private fun lastGoodIndexText(context: Context): String? =
+        trustPrefs(context).getString(KEY_CACHED_INDEX, null)
+
+    /**
+     * Signature/schema/freshness/rollback checks only, same split D-Store's `validateIndex` makes
+     * from its own `fetchLiveIndex` -- no state is written here, only read (this device's own last
+     * committed `IndexState`, for the rollback check). Returns `null` on ANY failure; every
+     * rejection reason collapses to the same "don't trust this" outcome.
+     */
+    private fun validate(context: Context, indexText: String, signatureText: String): IndexEnvelope? {
+        if (com.vythera.vyxelapps.api.verifySignature(indexText, signatureText) == null) return null
+        val envelope = try {
+            Gson().fromJson(indexText, IndexEnvelope::class.java)
+        } catch (_: Exception) { return null }
+        if (envelope.schema_version != com.vythera.vyxelapps.api.SUPPORTED_SCHEMA_VERSION) return null
+        if (com.vythera.vyxelapps.api.isExpired(envelope.expires_at)) return null
+        val candidate = com.vythera.vyxelapps.api.IndexState(envelope.sequence, envelope.generated_at)
+        if (com.vythera.vyxelapps.api.isRollback(candidate, lastState(context))) return null
+        return envelope
+    }
+
+    /**
+     * Public entry point for this leaf: fetch, verify, and on ANY failure (unset `baseUrl`,
+     * network error, bad signature, wrong schema, expired, rolled back) fall back to the last
+     * index this device itself already verified and cached. Same "serve stale, but only ever
+     * something once verified" tradeoff `zealot.ts`'s own `createZealotSource` comment flags as
+     * deliberate rather than silently decided -- revisit only once there's a real outage to learn
+     * from, not speculatively here.
+     *
+     * Returns the raw, now-trusted `index.json` text, or `null` if nothing has ever verified
+     * successfully on this device. Parsing it into `RawApp`/`GitHubRepo` entries is `1.a.ii.zo`'s
+     * job, not this one's.
+     */
+    suspend fun resolveVerifiedIndex(context: Context): String? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val fetched = fetchIndex()
+            if (fetched != null) {
+                val envelope = validate(context, fetched.indexText, fetched.signatureText)
+                if (envelope != null) {
+                    commitState(context, envelope, fetched.indexText, fetched.signatureText)
+                    return@withContext fetched.indexText
+                }
+            }
+            lastGoodIndexText(context) // fetch or verification failed -- fall back to last-known-good
+        }
 }
 
 // ── Preferences persistence ───────────────────────────────────────────────────
