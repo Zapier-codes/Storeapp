@@ -1510,7 +1510,6 @@ fun SearchScreen(
 ) {
     val t = LocalTheme.current
     val s = LocalStrings.current
-    var selectedSource  by remember { mutableStateOf<AppSource?>(null) }
     // localPlatform seeds from ViewModel state so it persists across navigation
     var localPlatform   by remember(platform) { mutableStateOf(platform) }
     var screenEntered   by remember { mutableStateOf(false) }
@@ -1527,12 +1526,6 @@ fun SearchScreen(
 
     val displayResults = run {
         var list = results
-        // Filter by source chip
-        list = when {
-            selectedSource == null -> list
-            selectedSource == AppSource.GITHUB -> list.filter { it.source == null || it.source == AppSource.GITHUB }
-            else -> list.filter { it.source == selectedSource }
-        }
         // Platform filter — only re-filter by platform labels when query has text.
         // When blank, onSearch() already filtered by AppSource→platform, so double-filtering
         // would incorrectly drop repos whose name/description don't contain the keyword.
@@ -1623,7 +1616,7 @@ fun SearchScreen(
 
         // ── BOTTOM: Bento grid results — rises from below on enter ────────────
         val gridState = rememberLazyGridState()
-        LaunchedEffect(query, localPlatform, selectedSource) {
+        LaunchedEffect(query, localPlatform) {
             gridState.scrollToItem(0)
         }
         AnimatedVisibility(
