@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Zapier-codes/Storeapp/spec/tenant-config.schema.json",
+  "title": "TenantConfig v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tenant_id", "generated_at", "sequence", "expires_at", "branding", "cdn_base"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Fixed at 1 for this shape. A consumer built against v1 MUST refuse any other value outright rather than best-effort parse it — same posture as the catalog index's schema_version check."
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "Permanent, immutable once first published — same rule as the catalog index's `slug`. DNS-label-safe (lowercase alphanumeric + hyphen, max 63 chars, no leading/trailing hyphen) because D-Store and Zealot resolve tenants by subdomain, so a tenant_id must always be usable as one even if a given deployment resolves some other way."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO-8601, as the catalog index."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Strictly increasing per publish for this tenant_id. A reader (Storeapp's TenantConfig fetch, 1.c.ii.zi) refuses any sequence lower than its last-cached value for the same tenant_id — anti-rollback, identical mechanism to the catalog index's own `sequence` field, reusing that same verification code path rather than a second implementation."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC ISO-8601 freshness bound. A reader refuses a record past this timestamp and falls back to its last-known-good cached copy — same posture as the catalog index."
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_name", "primary_color_hex"],
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "In-app display name shown in UI copy (about screen, headers). NOT the launcher/home-screen app name — that's `applicationId`-adjacent, build-time-fixed by Gradle product flavor (1.c.i.zo), and deliberately absent from this schema; see \"What's intentionally excluded\" below."
+        },
+        "primary_color_hex": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "logo_url": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "default": null
+        },
+        "logo_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$",
+          "default": null,
+          "description": "Required if logo_url is non-null — a reader should refuse to render a fetched logo whose hash doesn't match, same defensive posture as every other fetched-asset check in this program."
+        }
+      }
+    },
+    "cdn_base": {
+      "type": "string",
+      "format": "uri",
+      "description": "Feeds MetadataManager.cdnBase (Storeapp leaf 1.c.ii.zi), replacing today's compile-time constant. The default tenant's value MUST be exactly \"https://nikhilkain.github.io/appstore-metadata\" — the existing hardcoded string — so default install behavior is provably unchanged by this migration, not just intended to be."
+    },
+    "catalog_index_base_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "default": null,
+      "description": "Per-tenant equivalent of today's single ZEALOT_CATALOG_INDEX_BASE_URL env var (D-Store leaf 6.b.ii.zo, Zealot Task 37b). null means this tenant has no first-party Zealot source configured — the Zealot/AppSource.ZEALOT adapter (Storeapp 1.a.i.zo) simply has nothing to fetch, not an error. Deliberately a separate field from cdn_base: cdn_base points at unsigned, unverified upstream data by design (see Storeapp HANDOVER.md's superseded \"No CDN migration\" note); this field points at a signed, Ed25519-verified index. Conflating the two would blur a real trust-boundary difference."
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string", "format": "hostname" },
+      "default": [],
+      "description": "Domains/subdomains that resolve to this tenant at the D-Store/Zealot middleware layer (D-Store 6.b.ii.zi, Zealot Task 37b). Empty for a tenant not yet live on the web tier (e.g. an Android-only white-label spin-off) — not an error."
+    },
+    "is_default_tenant": {
+      "type": "boolean",
+      "default": false,
+      "description": "True for exactly one record: the seed tenant whose values reproduce today's pre-multi-tenant hardcoded behavior (cdn_base = the existing nikhilkain URL, branding = \"Vyxel Apps\"). Exists so a consumer can assert at least one such record is always present, never so every tenant with this shape is trusted equally — trust comes from the signature check (1.c.ii.zo), not this flag."
+    }
+  }
+}
