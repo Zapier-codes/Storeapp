@@ -23,6 +23,16 @@ import com.vythera.vyxelapps.RepoOwner
  * `ZealotClient.resolveVerifiedIndex()`'s already-signature-verified output.
  */
 
+/**
+ * The next free billion-scale bucket above GitLab's existing `9_000_000_000L`, so a Zealot
+ * `GitHubRepo.id` can never collide with any of the other six sources' synthetic ids. Shared
+ * (not just inlined in `toUnifiedRepo()` below) so any other code that needs to recognize a
+ * Zealot-sourced id from a bare `Long` — e.g. update-check routing, which has no dedicated
+ * `source` field to read on `InstallHistoryEntry` — uses the exact same value rather than a
+ * second copy of this magic number that could silently drift from this one.
+ */
+const val ZEALOT_ID_OFFSET = 10_000_000_000L
+
 data class ZealotCompatibility(val min_sdk: Int? = null)
 
 data class ZealotVersion(
@@ -117,8 +127,8 @@ fun parseZealotEntries(verifiedIndexJsonText: String): List<ZealotEntry> =
 fun ZealotEntry.toUnifiedRepo(): GitHubRepo {
     val latest = versions.firstOrNull()
 
-    val repoId = id.toLongOrNull()?.plus(10_000_000_000L)
-        ?: (kotlin.math.abs(id.hashCode()).toLong() + 10_000_000_000L)
+    val repoId = id.toLongOrNull()?.plus(ZEALOT_ID_OFFSET)
+        ?: (kotlin.math.abs(id.hashCode()).toLong() + ZEALOT_ID_OFFSET)
 
     val displayName = listing.title.ifBlank { slug }
     val fullName     = package_name?.takeIf { it.isNotBlank() } ?: slug
