@@ -46,7 +46,13 @@ fun AppThemeColors.toCustomThemeData() = CustomThemeData(
 
 // Derive a full AppThemeColors palette from accent color, optionally overriding individual colors
 fun CustomThemeData.toAppThemeColors(): AppThemeColors {
-    val accent = hexToColor(accentHex, Color(0xFFD0BCFF))
+    // d.i.zo: the ultimate parse-failure fallback (accentHex itself unparsable) now
+    // falls through to the tenant's own primaryColorHex before the hardcoded purple --
+    // TenantConfig.current defaults to "#D0BCFF" (same value as before this leaf) when
+    // no tenant config has ever been fetched, so this chain is a strict superset of the
+    // prior behavior, never a regression for the common case.
+    val tenantFallback = hexToColor(com.vythera.vyxelapps.api.TenantConfig.current.branding.primaryColorHex, Color(0xFFD0BCFF))
+    val accent = hexToColor(accentHex, tenantFallback)
     val hsv = FloatArray(3)
     android.graphics.Color.colorToHSV(
         android.graphics.Color.rgb(

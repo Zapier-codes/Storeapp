@@ -120,9 +120,17 @@ data class AppSettings(
     val followSystemMonet : Boolean = false
 )
 
-// User-editable custom theme — accent is required, extra fields override auto-derived colors
+// User-editable custom theme — accent is required, extra fields override auto-derived colors.
+// d.i.zo: `accentHex`'s default now reads `TenantConfig.current.branding.primaryColorHex`
+// instead of the hardcoded "#D0BCFF" literal -- this default only fires when no saved
+// `CustomThemeData` exists yet (`PreferencesManager.loadCustomTheme()`, `AppData.kt`),
+// so a first-run device seeds its "Custom" theme from the tenant's own brand color
+// rather than a fixed purple. A device with no tenant config ever fetched gets the
+// identical "#D0BCFF" value regardless, since that's TenantConfig's own compiled-in
+// default (`TenantConfig.kt`, `1.c.ii.zi`) -- same "default install behavior does not
+// change" guarantee every other TenantConfig-consuming leaf already makes.
 data class CustomThemeData(
-    val accentHex      : String  = "#D0BCFF",
+    val accentHex      : String  = com.vythera.vyxelapps.api.TenantConfig.current.branding.primaryColorHex,
     val isDark         : Boolean = true,
     val bgHex          : String  = "",   // "" = auto-derived from accent
     val surfaceHex     : String  = "",
