@@ -862,6 +862,7 @@ fun FeaturedCard(apps: List<GitHubRepo>, onAppClick: (GitHubRepo) -> Unit) {
                             AppSource.FLATHUB  -> "View on Flathub"
                             AppSource.WINGET   -> "View on Winget"
                             AppSource.IZZY     -> "View on IzzyOnDroid"
+                            AppSource.ZEALOT   -> "View on Zealot"
                             null               -> "View App"
                         }
                         Button(
@@ -2830,6 +2831,7 @@ fun AppDetailScreen(
                             AppSource.IZZY     -> "IzzyOnDroid"
                             AppSource.FLATHUB  -> "Flathub"
                             AppSource.WINGET   -> "Winget"
+                            AppSource.ZEALOT   -> "Zealot"
                             else               -> "GitHub"
                         }
                         FilledTonalButton(
@@ -2933,6 +2935,7 @@ fun AppDetailScreen(
                                     AppSource.IZZY     -> "IzzyOnDroid Developer"
                                     AppSource.FLATHUB  -> "Flathub Developer"
                                     AppSource.WINGET   -> "Winget Developer"
+                                    AppSource.ZEALOT   -> "Zealot Developer"
                                     else               -> "GitHub Developer"
                                 }
                                 Text(devLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

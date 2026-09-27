@@ -50,7 +50,10 @@ enum class AppSource(val label: String, val colorHex: Long) {
     FDROID   ("F-Droid",     0xFF1976D2L),
     IZZY     ("IzzyOnDroid", 0xFF0D47A1L),
     FLATHUB  ("Flathub",     0xFFEEEEEEL),
-    WINGET   ("Winget",      0xFFFFD966L)
+    WINGET   ("Winget",      0xFFFFD966L),
+    // 1.a.i.zi — addressable stub only; ZealotClient/verification/converter land in 1.a.i.zo–1.a.ii.zo.
+    // Color matches Zealot's own primary brand color (app/assets/stylesheets/_button.scss, --bs-primary-bg).
+    ZEALOT   ("Zealot",      0xFF3F6791L)
 }
 
 data class GitHubRepo(
@@ -901,6 +904,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             AppSource.WINGET   -> "winget"
             AppSource.GITHUB   -> "github"
             AppSource.IZZY     -> "izzy"
+            // 1.a.i.zi stub: addressable, but no ZealotClient yet (1.a.i.zo) — resolves to an
+            // empty browse (MetadataManager has no "zealot" CDN source) rather than falling
+            // through to the generic GitHub topic-search branch below.
+            AppSource.ZEALOT   -> "zealot"
             else               -> null
         }
         if (cdnKey != null) {
