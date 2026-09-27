@@ -751,7 +751,16 @@ fun HomeTab(
                                 }
                             }
                             item(key = "r1") {
-                                AppRow(strings.sectionTrending, state.trending, installed, refreshToken = state.refreshToken) { onAppClick(it) }
+                                // 1.a.iii.zi: Zealot's verified apps go first, prepended ahead
+                                // of `trending` — read fresh here on every recomposition
+                                // (rather than merged once at write time in the ViewModel,
+                                // which raced against `trending` itself being reassigned later
+                                // in the same load), and never entering `trending`'s own
+                                // popularity-based ordering.
+                                val trendingWithZealot = remember(state.zealotApps, state.trending) {
+                                    (state.zealotApps + state.trending).distinctBy { it.id }
+                                }
+                                AppRow(strings.sectionTrending, trendingWithZealot, installed, refreshToken = state.refreshToken) { onAppClick(it) }
                             }
                             item(key = "r2") {
                                 AppRow(strings.sectionMedia, state.media, installed, refreshToken = state.refreshToken) { onAppClick(it) }

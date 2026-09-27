@@ -220,6 +220,10 @@ data class UiState(
     val izzyApps        : List<GitHubRepo>        = emptyList(),
     val flathubApps     : List<GitHubRepo>        = emptyList(),
     val wingetApps          : List<GitHubRepo>        = emptyList(),
+    // 1.a.iii.zi: Zealot's verified, converted apps — loaded once in loadAll() (same as the
+    // other six *Apps lists above) and reused from here by every prepend-first merge site
+    // (openSourceBrowse, category browsing, search) rather than each re-fetching it.
+    val zealotApps          : List<GitHubRepo>        = emptyList(),
     val selfUpdateInfo      : SelfUpdateInfo?         = null,
     val selfUpdateDismissed : Boolean                 = false,
 )
@@ -1044,6 +1048,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(selectedSource = source)
     }
 
+    // ── 1.a.iii.zi: Zealot prepend-first merge ──────────────────────────────────
+    // Shared by every surface that mixes Zealot entries in with other sources
+    // (home shelves' `trending`, openSourceBrowse's merged list, category browsing,
+    // and search) so Zealot's placement can't drift between call sites into
+    // something that's just a variant of the stars-boost this is explicitly not.
+
+    /**
+     * Fetches Zealot's already-verified index (`ZealotClient.resolveVerifiedIndex`, which
+     * owns its own fetch/verify/last-good-cache fallback from `1.a.ii.zi`) and converts it
+     * with `1.a.ii.zo`'s `toUnifiedRepo()`. Never touches raw/unverified fetch text itself.
+     * Collapses "no baseUrl configured" / "nothing ever verified on this device" / any
+     * parse failure to an empty list, same "never throw, empty is a valid state" posture
+     * every other CDN source in this file already uses.
+     */
+    private suspend fun fetchZealotApps(): List<GitHubRepo> =
+        try {
+            ZealotClient.resolveVerifiedIndex(ctx)
+                ?.let { com.vythera.vyxelapps.api.parseZealotEntries(it) }
+                ?.map { it.toUnifiedRepo() }
+                ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+
+    /**
+     * Pins any `AppSource.ZEALOT` entries in `list` at the very front — prepended, never
+     * entering the `stargazers_count` sort every other source's merge already applies
+     * (`1.a.ii.zo`'s converter deliberately never invents a popularity number for Zealot
+     * entries to be sorted by, so sorting them in would be arbitrary). Zealot entries keep
+     * whatever relative order they arrived in (Zealot's own index order, since Kotlin's
+     * `partition`/`sortedByDescending` are both stable); everything else is sorted by
+     * `stargazers_count` exactly as every call site did before this leaf.
+     */
+    private fun zealotFirst(list: List<GitHubRepo>): List<GitHubRepo> {
+        val (zealot, rest) = list.partition { it.source == AppSource.ZEALOT }
+        return zealot + rest.sortedByDescending { it.stargazers_count }
+    }
+
+    /**
+     * Which of the already-loaded `state.zealotApps` are relevant to a collection/category
+     * query string (e.g. `"topic:android privacy"`). Zealot's index carries no `topic:` tags
+     * of its own, so this is the same best-effort keyword/fuzzy match `loadAll()`'s own
+     * `toRows()` already applies when matching GitHub entries into category rows for the
+     * same reason — not a network call, since `state.zealotApps` is already loaded.
+     */
+    private fun matchingZealotApps(query: String): List<GitHubRepo> {
+        if (state.zealotApps.isEmpty()) return emptyList()
+        val keywords = query.lowercase()
+            .replace("topic:", " ")
+            .replace(Regex("stars:\\S+"), " ")
+            .split(" ", ":")
+            .map { it.trim() }
+            .filter { it.length > 2 }
+        if (keywords.isEmpty()) return emptyList()
+        return state.zealotApps.filter { repo ->
+            keywords.any { kw ->
+                fuzzyMatch(repo.name, kw) || (!repo.description.isNullOrEmpty() && fuzzyMatch(repo.description, kw))
+            }
+        }
+    }
+
     fun openSourceBrowse(source: AppSource) {
         val cdnKey = when (source) {
             AppSource.FDROID   -> "fdroid"
@@ -1068,6 +1131,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 AppSource.FLATHUB  -> state.flathubApps
                 AppSource.WINGET   -> state.wingetApps
                 AppSource.IZZY     -> state.izzyApps
+                AppSource.ZEALOT   -> state.zealotApps
                 AppSource.GITHUB   -> (state.trending + state.media + state.tools + state.games +
                                        state.browsers + state.productivity + state.security + state.devtools +
                                        state.photoVideo + state.music + state.finance + state.education +
@@ -1090,8 +1154,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 suspend fun mergeSource(apps: List<GitHubRepo>) {
                     val fresh = apps.filter { seen.add(it.id) }
                     if (fresh.isEmpty()) return
+                    // 1.a.iii.zi: zealotFirst pins any Zealot entries (whether `fresh` here is
+                    // Zealot itself, browsing AppSource.ZEALOT's own tab below, or this is any
+                    // other source's tab with no Zealot entries in play at all) ahead of the
+                    // stars-sort — a strict superset of the old plain sortedByDescending.
                     state = state.copy(
-                        seeAllApps      = (state.seeAllApps + fresh).sortedByDescending { it.stargazers_count },
+                        seeAllApps      = zealotFirst(state.seeAllApps + fresh),
                         isLoadingSeeAll = false
                     )
                 }
@@ -1152,6 +1220,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     AppSource.IZZY -> launch {
                         try {
                             val apps = IzzyOnDroidClient.getApps(100)
+                            mutex.withLock { mergeSource(apps) }
+                        } catch (_: Exception) {}
+                    }
+                    // Zealot: fetch+verify+convert (1.a.ii.zi/1.a.ii.zo); j1's "zealot" cdnKey
+                    // above always no-ops (MetadataManager has no such CDN source), so this is
+                    // this tab's only real data path.
+                    AppSource.ZEALOT -> launch {
+                        try {
+                            val apps = fetchZealotApps()
                             mutex.withLock { mergeSource(apps) }
                         } catch (_: Exception) {}
                     }
@@ -1312,6 +1389,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 launch { val fh = cdnSource("flathub"); if (isActive && fh.isNotEmpty()) state = state.copy(flathubApps = fh) }
                 launch { val wg = cdnSource("winget"); if (isActive && wg.isNotEmpty()) state = state.copy(wingetApps = wg) }
                 launch { val iz = cdnSource("izzy"); if (isActive && iz.isNotEmpty()) state = state.copy(izzyApps = iz) }
+                // 1.a.iii.zi: Zealot goes first on the home screen too. Loaded independently
+                // like every other source above, into its own `zealotApps` field rather than
+                // written directly into `trending` — the main GH flow below reassigns
+                // `trending` wholesale at more than one point later in this same function
+                // (initial assignment, then again in the Phase-2 fallback), and either could
+                // still be in flight when this network fetch resolves, so mutating `trending`
+                // from here directly would be a real lost-update race. The flagship home
+                // shelf (`trending`) is instead built by prepending `state.zealotApps` ahead
+                // of `state.trending` at render time (`HomeScreen.kt`), which is race-free
+                // because it reads both fields fresh on every recomposition rather than
+                // trying to merge them once, here, at write time.
+                launch {
+                    val za = fetchZealotApps()
+                    if (isActive && za.isNotEmpty()) state = state.copy(zealotApps = za)
+                }
 
                 // GitHub is awaited — home screen category rows depend on it
                 val ghEntries = try { c.browseSource("github", 1).apps }
@@ -1560,7 +1652,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 state.fitness + state.artDesign + state.news + state.social +
                 state.cloudStorage + state.cooking +
                 state.gitlabApps + state.codebergApps +
-                state.fdroidApps + state.izzyApps + state.flathubApps + state.wingetApps
+                state.fdroidApps + state.izzyApps + state.flathubApps + state.wingetApps +
+                state.zealotApps
         ).distinctBy { it.id }
 
         // Normalize: GitHub repos loaded from the API have source=null (Gson ignores Kotlin defaults)
@@ -1568,15 +1661,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         val localMatches = if (q.isNotBlank()) {
             val qt = q.trim().lowercase()
-            allNormalized.filter { repo ->
+            zealotFirst(allNormalized.filter { repo ->
                 fuzzyMatch(repo.name, qt) ||
                         fuzzyMatch(repo.owner.login, qt) ||
                         (!repo.description.isNullOrEmpty() && fuzzyMatch(repo.description, qt))
-            }.sortedByDescending { it.stargazers_count }
+            })
         } else {
             // No text — show loaded apps that match the active platform filter
             val platformSources: Set<AppSource>? = when (state.platform) {
-                AppPlatform.ANDROID -> setOf(AppSource.GITHUB, AppSource.IZZY, AppSource.FDROID)
+                // 1.a.iii.zi: Zealot's catalog is Android APKs (same posture as GitHub/IzzyOnDroid/
+                // F-Droid here), so its entries belong in the Android platform filter too.
+                AppPlatform.ANDROID -> setOf(AppSource.GITHUB, AppSource.IZZY, AppSource.FDROID, AppSource.ZEALOT)
                 AppPlatform.WINDOWS -> setOf(AppSource.WINGET)
                 AppPlatform.LINUX   -> setOf(AppSource.FLATHUB, AppSource.CODEBERG, AppSource.GITLAB)
                 AppPlatform.TV      -> setOf(AppSource.GITHUB, AppSource.IZZY)
@@ -1584,8 +1679,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 else                -> null   // ALL with no text → keep empty (default state)
             }
             if (platformSources != null)
-                allNormalized.filter { it.source in platformSources }
-                             .sortedByDescending { it.stargazers_count }
+                zealotFirst(allNormalized.filter { it.source in platformSources })
             else emptyList()
         }
 
@@ -1604,7 +1698,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val fresh = newItems.filter { seen.add(it.id) }
                 if (fresh.isEmpty()) return
                 state = state.copy(
-                    searchResults = (state.searchResults + fresh).sortedByDescending { it.stargazers_count }
+                    searchResults = zealotFirst(state.searchResults + fresh)
                 )
             }
 
@@ -1663,7 +1757,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val r = RetrofitClient.service.searchRepos(query, perPage = 30, page = 1)
-                state = state.copy(seeAllApps = r.items, isLoadingSeeAll = false)
+                // 1.a.iii.zi: category browsing goes through this same function for both
+                // collections (e.g. "topic:android privacy") and the generic per-source
+                // fallback in openSourceBrowse below. Zealot's index carries no `topic:` tags
+                // of its own to filter by, so `matchingZealotApps` best-effort matches it
+                // against the query text the same way `loadAll()`'s own `toRows()` already
+                // does for GitHub entries — an unrelated collection query simply matches zero
+                // Zealot apps rather than always prepending the whole catalog regardless of
+                // relevance.
+                state = state.copy(
+                    seeAllApps      = matchingZealotApps(query) + r.items,
+                    isLoadingSeeAll = false
+                )
             } catch (e: Exception) {
                 state = state.copy(isLoadingSeeAll = false)
             }
