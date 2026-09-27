@@ -41,6 +41,32 @@ import kotlinx.coroutines.delay
 
 enum class VAppTab { HOME, SEARCH, INSTALLED, PROFILE, SETTINGS }
 
+// d.iii.zi: top category tabs for the Play Store-style home shell — canonical,
+// source-agnostic (no AppSource involved), one entry per existing curated genre
+// row. `label` is a property reference into AppStrings rather than a literal,
+// so tab text stays localized through the same mechanism every other UI string
+// in this app already uses, with no strings duplicated here.
+enum class HomeCategory(val label: (AppStrings) -> String) {
+    TRENDING     (AppStrings::sectionTrending),
+    MEDIA        (AppStrings::sectionMedia),
+    TOOLS        (AppStrings::sectionTools),
+    GAMES        (AppStrings::sectionGames),
+    BROWSERS     (AppStrings::sectionBrowsers),
+    PRODUCTIVITY (AppStrings::sectionProductivity),
+    SECURITY     (AppStrings::sectionSecurity),
+    DEVTOOLS     (AppStrings::sectionDevTools),
+    PHOTO_VIDEO  (AppStrings::sectionPhotoVideo),
+    MUSIC        (AppStrings::sectionMusic),
+    FINANCE      (AppStrings::sectionFinance),
+    EDUCATION    (AppStrings::sectionEducation),
+    FITNESS      (AppStrings::sectionFitness),
+    ART_DESIGN   (AppStrings::sectionArtDesign),
+    NEWS         (AppStrings::sectionNews),
+    SOCIAL       (AppStrings::sectionSocial),
+    CLOUD_STORAGE(AppStrings::sectionCloudStorage),
+    COOKING      (AppStrings::sectionCooking)
+}
+
 private const val Q_TRENDING     = "topic:android apk stars:>500"
 private const val Q_MEDIA        = "topic:android media player stars:>100"
 private const val Q_TOOLS        = "topic:android utility tool stars:>100"
@@ -75,6 +101,7 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
     val homeListState = rememberLazyListState()
 
     var selectedTab   by remember { mutableStateOf(VAppTab.HOME) }
+    var selectedCategory by remember { mutableStateOf<HomeCategory?>(null) } // null = "For You"
     var selectedRepo  by remember { mutableStateOf<GitHubRepo?>(null) }
     var showSeeAll    by remember { mutableStateOf(false) }
     var showCompare by remember { mutableStateOf(false) }
@@ -646,11 +673,13 @@ fun HomeTab(
                     modifier      = Modifier.offset(y = (-8).dp)
                 )
             }
-            item(key = "source_chips") {
-                HomeSourceChipsRow(
-                    selectedSource = state.selectedSource,
-                    onSourceSelect = { viewModel.setSourceFilter(it) },
-                    modifier       = Modifier.padding(top = 8.dp, bottom = 8.dp)
+            item(key = "category_tabs") {
+                HomeCategoryTabsRow(
+                    categories       = remember { HomeCategory.entries },
+                    selectedCategory = selectedCategory,
+                    onCategorySelect = { selectedCategory = it },
+                    strings          = strings,
+                    modifier         = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
             }
 
@@ -672,10 +701,12 @@ fun HomeTab(
                 } else if (state.isLoading) {
                     item(key = "loading") { LoadingPlaceholder() }
                 } else {
-                    // Hero banner, collections, sources — hidden when a source filter is active
+                    // Hero banner, collections — hidden when a specific category tab
+                    // (anything but "For You") is selected, same visibility rule the
+                    // old per-source chip filter used.
                     item(key = "featured") {
                         AnimatedVisibility(
-                            visible = state.selectedSource == null,
+                            visible = selectedCategory == null,
                             enter   = expandVertically(tween(420)) + fadeIn(tween(300, delayMillis = 80)),
                             exit    = slideOutVertically(tween(320)) { -it / 3 } + shrinkVertically(tween(360)) + fadeOut(tween(260))
                         ) {
@@ -693,7 +724,7 @@ fun HomeTab(
                     }
                     item(key = "collections") {
                         AnimatedVisibility(
-                            visible = state.selectedSource == null,
+                            visible = selectedCategory == null,
                             enter   = expandVertically(tween(400)) + fadeIn(tween(300, delayMillis = 40)),
                             exit    = slideOutVertically(tween(280)) { -it / 3 } + shrinkVertically(tween(330)) + fadeOut(tween(230))
                         ) {
@@ -705,26 +736,64 @@ fun HomeTab(
                     }
                     // d.ii.zi: per-source shelves removed as user-facing UI (SourcesRow tiles
                     // and the source-keyed `when` branches below are gone) — canonical rows
-                    // now render unconditionally, regardless of `state.selectedSource`.
-                    // `AppSource` itself, `state.selectedSource`, and the six per-source app
-                    // lists (`state.fdroidApps` etc.) are untouched: still real data, still
-                    // read by `openSourceBrowse`/search/`zealotFirst`/`UpdateCheckWorker` —
-                    // this is presentation-layer only, per this leaf's own scope.
+                    // rendered unconditionally, regardless of source.
+                    // `AppSource` itself and the six per-source app lists (`state.fdroidApps`
+                    // etc.) are untouched: still real data, still read by
+                    // `openSourceBrowse`/search/`zealotFirst`/`UpdateCheckWorker`.
+                    // d.iii.zi: `state.selectedSource`/`setSourceFilter`/`HomeSourceChipsRow`
+                    // (the source-filter chip row this comment used to reference) are gone —
+                    // that was Home's only call site (confirmed by a repo-wide grep before
+                    // removing it) and it's superseded here by `HomeCategoryTabsRow`, a
+                    // genre-based top-tab bar with no source concept, matching the rest of
+                    // Track d's "canonical unified catalog, no source-branded UI" direction.
+                    // Selecting a tab other than "For You" now filters Home to a single
+                    // category's full list instead of the shelf-of-shelves default.
+                    // 1.a.iii.zi: Zealot's verified apps go first, prepended ahead of
+                    // `trending`, and never entering `trending`'s own popularity-based
+                    // ordering. Computed as a plain val, not `remember` — this sits directly
+                    // in LazyColumn's `content: LazyListScope.() -> Unit` block, which is not
+                    // itself a `@Composable` scope (only the lambdas passed to `item{}` are),
+                    // so `remember` isn't callable here; re-deriving a `distinctBy` over two
+                    // already-loaded, typically-small lists on each content recomposition is
+                    // cheap enough not to need memoizing.
+                    val trendingWithZealot = (state.zealotApps + state.trending).distinctBy { it.id }
+                    if (selectedCategory != null) {
+                        val categoryApps = when (selectedCategory) {
+                            HomeCategory.TRENDING      -> trendingWithZealot
+                            HomeCategory.MEDIA         -> state.media
+                            HomeCategory.TOOLS         -> state.tools
+                            HomeCategory.GAMES         -> state.games
+                            HomeCategory.BROWSERS      -> state.browsers
+                            HomeCategory.PRODUCTIVITY  -> state.productivity
+                            HomeCategory.SECURITY      -> state.security
+                            HomeCategory.DEVTOOLS      -> state.devtools
+                            HomeCategory.PHOTO_VIDEO   -> state.photoVideo
+                            HomeCategory.MUSIC         -> state.music
+                            HomeCategory.FINANCE       -> state.finance
+                            HomeCategory.EDUCATION     -> state.education
+                            HomeCategory.FITNESS       -> state.fitness
+                            HomeCategory.ART_DESIGN    -> state.artDesign
+                            HomeCategory.NEWS          -> state.news
+                            HomeCategory.SOCIAL        -> state.social
+                            HomeCategory.CLOUD_STORAGE -> state.cloudStorage
+                            HomeCategory.COOKING       -> state.cooking
+                        }
+                        item(key = "category_${selectedCategory.name}") {
+                            CategoryAppList(
+                                title      = selectedCategory.label(strings),
+                                apps       = categoryApps,
+                                installed  = installed,
+                                onAppClick = onAppClick
+                            )
+                        }
+                        return@LazyColumn
+                    }
                     if (state.recommendations.isNotEmpty()) {
                         item(key = "recs") {
                             AppRow(strings.sectionRecommended, state.recommendations, installed) { onAppClick(it) }
                         }
                     }
                     item(key = "r1") {
-                        // 1.a.iii.zi: Zealot's verified apps go first, prepended ahead
-                        // of `trending` — read fresh here on every recomposition
-                        // (rather than merged once at write time in the ViewModel,
-                        // which raced against `trending` itself being reassigned later
-                        // in the same load), and never entering `trending`'s own
-                        // popularity-based ordering.
-                        val trendingWithZealot = remember(state.zealotApps, state.trending) {
-                            (state.zealotApps + state.trending).distinctBy { it.id }
-                        }
                         AppRow(strings.sectionTrending, trendingWithZealot, installed, refreshToken = state.refreshToken) { onAppClick(it) }
                     }
                     item(key = "r2") {

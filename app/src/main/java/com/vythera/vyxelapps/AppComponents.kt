@@ -707,48 +707,52 @@ fun HomeSearchBar(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOME SOURCE CHIPS  — M3 FilterChip
+// HOME CATEGORY TABS  — M3 FilterChip (d.iii.zi)
+// Replaces the old HomeSourceChipsRow (removed this leaf — its one call site
+// was Home, confirmed by a repo-wide grep before deleting it): a Play
+// Store-style shell tabs by genre, not by backing data source. "For You"
+// (null) is the default, unfiltered shelf-of-shelves view; every other tab
+// filters Home to that one category's full list.
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun HomeSourceChipsRow(
-    selectedSource : AppSource?,
-    onSourceSelect : (AppSource?) -> Unit,
-    modifier       : Modifier = Modifier
+fun HomeCategoryTabsRow(
+    categories      : List<HomeCategory>,
+    selectedCategory: HomeCategory?,
+    onCategorySelect: (HomeCategory?) -> Unit,
+    strings         : AppStrings,
+    modifier        : Modifier = Modifier
 ) {
-    val chips = remember {
-        listOf(
-            Triple(null,               "All Sources",  R.drawable.all),
-            Triple(AppSource.GITHUB,   "GitHub",       R.drawable.github),
-            Triple(AppSource.FDROID,   "F-Droid",      R.drawable.fdroid),
-            Triple(AppSource.GITLAB,   "GitLab",       R.drawable.gitlab),
-            Triple(AppSource.CODEBERG, "Codeberg",     R.drawable.codeberg),
-            Triple(AppSource.IZZY,     "IzzyOnDroid",  R.drawable.ic_izzy_logo),
-            Triple(AppSource.FLATHUB,  "Flathub",      R.drawable.flathub),
-            Triple(AppSource.WINGET,   "Winget",       R.drawable.winget)
-        )
-    }
     LazyRow(
         modifier              = modifier,
         contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(items = chips) { (src, label, iconRes) ->
-            val selected = selectedSource == src
+        item(key = "for_you") {
+            val selected = selectedCategory == null
             FilterChip(
-                selected    = selected,
-                onClick     = { onSourceSelect(src) },
-                label       = {
+                selected = selected,
+                onClick  = { onCategorySelect(null) },
+                label    = {
                     Text(
-                        label,
+                        strings.forYou,
                         style      = MaterialTheme.typography.labelLarge,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
                 },
-                leadingIcon = {
-                    Image(
-                        painter            = painterResource(id = iconRes),
-                        contentDescription = null,
-                        modifier           = Modifier.size(20.dp)
+                shape    = CircleShape,
+                modifier = Modifier.height(40.dp)
+            )
+        }
+        items(items = categories, key = { it.name }) { cat ->
+            val selected = selectedCategory == cat
+            FilterChip(
+                selected = selected,
+                onClick  = { onCategorySelect(cat) },
+                label    = {
+                    Text(
+                        cat.label(strings),
+                        style      = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
                 },
                 shape    = CircleShape,
@@ -1426,6 +1430,46 @@ fun PlatformGrid(
                 color      = MaterialTheme.colorScheme.onSurface
             )
         }
+        Column(
+            modifier            = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            apps.forEachIndexed { index, repo ->
+                AppListTile(
+                    repo        = repo,
+                    isInstalled = installed.contains(repo.id),
+                    tileIndex   = index,
+                    onClick     = { onAppClick(repo) }
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATEGORY APP LIST  — d.iii.zi: full vertical listing for a selected top
+// category tab (`HomeCategory`), same tile-list body as PlatformGrid but
+// generic on a plain title string instead of `AppPlatform` — a genre tab has
+// no platform/emoji/color concept of its own to key off, and no source
+// concept either (canonical unified catalog, no source-branded UI, same
+// direction `d.ii` already set). `title` is expected to already carry its own
+// emoji, matching every `AppStrings.sectionX` value this is fed from.
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun CategoryAppList(
+    title     : String,
+    apps      : List<GitHubRepo>,
+    installed : Set<Long> = emptySet(),
+    onAppClick: (GitHubRepo) -> Unit
+) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            title,
+            style      = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color      = MaterialTheme.colorScheme.onSurface,
+            modifier   = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
         Column(
             modifier            = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)

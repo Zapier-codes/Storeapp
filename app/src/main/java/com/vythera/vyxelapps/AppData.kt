@@ -244,7 +244,6 @@ data class UiState(
     val selectedSubCategories  : Set<String>             = emptySet(),
     val isFilterMenuOpen: Boolean = false,
     val activeSubMenuPlatform: AppPlatform? = null,
-    val selectedSource  : AppSource?             = null,
     val gitlabApps      : List<GitHubRepo>        = emptyList(),
     val codebergApps    : List<GitHubRepo>        = emptyList(),
     val fdroidApps      : List<GitHubRepo>        = emptyList(),
@@ -1083,10 +1082,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSubMenuPlatform(platform: AppPlatform?) {
         state = state.copy(activeSubMenuPlatform = platform)
-    }
-
-    fun setSourceFilter(source: AppSource?) {
-        state = state.copy(selectedSource = source)
     }
 
     // ── 1.a.iii.zi: Zealot prepend-first merge ──────────────────────────────────

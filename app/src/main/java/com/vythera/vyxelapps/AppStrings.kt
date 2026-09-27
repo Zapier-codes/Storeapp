@@ -51,6 +51,8 @@ data class AppStrings(
     val release: String = "Release",
     val noDescAvailable: String = "No description available.",
     val translatedRedo: String = "Translated · Redo",
+    // ── Home category tabs (d.iii.zi) ───────────────────────────────────────────
+    val forYou: String = "For You",
     // ── Home sections ─────────────────────────────────────────────────────────
     val sectionRecommended: String = "⭐ Recommended for You",
     val sectionTrending: String = "🔥 Trending Now",
@@ -194,7 +196,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "इंस्टॉल्ड", removedStatus = "हटाया गया",
         loadingApps = "सभी स्रोतों से ऐप्स लोड हो रहे हैं…",
         pressBackToExit = "बाहर निकलने के लिए फिर से दबाएं",
-        noApkAvailable = "APK उपलब्ध नहीं", translateTo = "में अनुवाद करें",
+        noApkAvailable = "APK उपलब्ध नहीं", translateTo = "में अनुवाद करें", forYou = "आपके लिए",
     )
 
     "Spanish" -> AppStrings(
@@ -260,7 +262,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Instalado", removedStatus = "Eliminado",
         loadingApps = "Cargando apps de todas las fuentes…",
         pressBackToExit = "Pulsa atrás de nuevo para salir",
-        noApkAvailable = "Sin APK Disponible", translateTo = "Traducir a",
+        noApkAvailable = "Sin APK Disponible", translateTo = "Traducir a", forYou = "Para ti",
     )
 
     "French" -> AppStrings(
@@ -325,7 +327,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Installé", removedStatus = "Supprimé",
         loadingApps = "Chargement des apps depuis toutes les sources…",
         pressBackToExit = "Appuyez à nouveau pour quitter",
-        noApkAvailable = "Pas d'APK Disponible", translateTo = "Traduire en",
+        noApkAvailable = "Pas d'APK Disponible", translateTo = "Traduire en", forYou = "Pour vous",
     )
 
     "German" -> AppStrings(
@@ -390,7 +392,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Installiert", removedStatus = "Entfernt",
         loadingApps = "Apps aus allen Quellen werden geladen…",
         pressBackToExit = "Zum Beenden erneut zurück drücken",
-        noApkAvailable = "Kein APK verfügbar", translateTo = "Übersetzen nach",
+        noApkAvailable = "Kein APK verfügbar", translateTo = "Übersetzen nach", forYou = "Für dich",
     )
 
     "Japanese" -> AppStrings(
@@ -454,7 +456,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "インストール済", removedStatus = "削除済",
         loadingApps = "全ソースからアプリを読み込み中…",
         pressBackToExit = "もう一度戻るを押して終了",
-        noApkAvailable = "APKなし", translateTo = "に翻訳",
+        noApkAvailable = "APKなし", translateTo = "に翻訳", forYou = "あなたへ",
     )
 
     "Portuguese" -> AppStrings(
@@ -519,7 +521,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Instalado", removedStatus = "Removido",
         loadingApps = "Carregando apps de todas as fontes…",
         pressBackToExit = "Pressione voltar novamente para sair",
-        noApkAvailable = "Sem APK Disponível", translateTo = "Traduzir para",
+        noApkAvailable = "Sem APK Disponível", translateTo = "Traduzir para", forYou = "Para você",
     )
 
     "Italian" -> AppStrings(
@@ -584,7 +586,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Installato", removedStatus = "Rimosso",
         loadingApps = "Caricamento app da tutte le fonti…",
         pressBackToExit = "Premi di nuovo indietro per uscire",
-        noApkAvailable = "Nessun APK Disponibile", translateTo = "Traduci in",
+        noApkAvailable = "Nessun APK Disponibile", translateTo = "Traduci in", forYou = "Per te",
     )
 
     "Russian" -> AppStrings(
@@ -649,7 +651,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Установлено", removedStatus = "Удалено",
         loadingApps = "Загрузка приложений из всех источников…",
         pressBackToExit = "Нажмите ещё раз для выхода",
-        noApkAvailable = "APK недоступен", translateTo = "Перевести на",
+        noApkAvailable = "APK недоступен", translateTo = "Перевести на", forYou = "Для вас",
     )
 
     "Chinese" -> AppStrings(
@@ -713,7 +715,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "已安装", removedStatus = "已移除",
         loadingApps = "正在从所有来源加载应用…",
         pressBackToExit = "再次按返回键退出",
-        noApkAvailable = "无可用 APK", translateTo = "翻译为",
+        noApkAvailable = "无可用 APK", translateTo = "翻译为", forYou = "为你推荐",
     )
 
     "Korean" -> AppStrings(
@@ -777,7 +779,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "설치됨", removedStatus = "제거됨",
         loadingApps = "모든 소스에서 앱 로드 중…",
         pressBackToExit = "다시 뒤로 누르면 종료",
-        noApkAvailable = "APK 없음", translateTo = "번역 언어",
+        noApkAvailable = "APK 없음", translateTo = "번역 언어", forYou = "당신을 위해",
     )
 
     "Arabic" -> AppStrings(
@@ -842,7 +844,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "مثبّت", removedStatus = "مُزال",
         loadingApps = "جارٍ تحميل التطبيقات من جميع المصادر…",
         pressBackToExit = "اضغط رجوع مرة أخرى للخروج",
-        noApkAvailable = "لا يوجد APK", translateTo = "ترجمة إلى",
+        noApkAvailable = "لا يوجد APK", translateTo = "ترجمة إلى", forYou = "لك",
     )
 
     "Dutch" -> AppStrings(
@@ -906,7 +908,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Geïnstalleerd", removedStatus = "Verwijderd",
         loadingApps = "Apps laden van alle bronnen…",
         pressBackToExit = "Druk nogmaals terug om te sluiten",
-        noApkAvailable = "Geen APK Beschikbaar", translateTo = "Vertalen naar",
+        noApkAvailable = "Geen APK Beschikbaar", translateTo = "Vertalen naar", forYou = "Voor jou",
     )
 
     "Turkish" -> AppStrings(
@@ -970,7 +972,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Kurulu", removedStatus = "Kaldırıldı",
         loadingApps = "Tüm kaynaklardan uygulamalar yükleniyor…",
         pressBackToExit = "Çıkmak için tekrar geri basın",
-        noApkAvailable = "APK Mevcut Değil", translateTo = "Çevir:",
+        noApkAvailable = "APK Mevcut Değil", translateTo = "Çevir:", forYou = "Senin İçin",
     )
 
     "Polish" -> AppStrings(
@@ -1035,7 +1037,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Zainstalowane", removedStatus = "Usunięte",
         loadingApps = "Ładowanie aplikacji ze wszystkich źródeł…",
         pressBackToExit = "Naciśnij wstecz ponownie, aby wyjść",
-        noApkAvailable = "Brak APK", translateTo = "Przetłumacz na",
+        noApkAvailable = "Brak APK", translateTo = "Przetłumacz na", forYou = "Dla Ciebie",
     )
 
     "Swedish" -> AppStrings(
@@ -1099,7 +1101,7 @@ fun stringsForLanguage(language: String): AppStrings = when (language) {
         installedStatus = "Installerat", removedStatus = "Borttaget",
         loadingApps = "Laddar appar från alla källor…",
         pressBackToExit = "Tryck tillbaka igen för att avsluta",
-        noApkAvailable = "Ingen APK Tillgänglig", translateTo = "Översätt till",
+        noApkAvailable = "Ingen APK Tillgänglig", translateTo = "Översätt till", forYou = "För dig",
     )
 
     else -> AppStrings() // English default
