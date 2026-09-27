@@ -53,6 +53,32 @@ This repo is the on-device client in the same program as `D-Store` (public store
 - [ ] 1.c.iii.zi — D-Store: domain/subdomain → tenant resolution at the Next.js middleware layer, backed by the shared tenant-config schema (`1.c.i.zi`). *(cross-repo, tracked here for visibility only — real checklist lives in D-Store's own `HANDOVER.md`)*
 - [ ] 1.c.iii.zo — Zealot: same domain-based tenant resolution at the Rails middleware/Rack layer. *(cross-repo, tracked here for visibility only — real checklist lives in `zealot`'s own `HANDOVER.md`)*
 
+### Track d — Canonical unified UX & multi-tenant design system (Play Store-style revamp)
+*(operator-directed, this session — cross-repo in spirit: D-Store already ran its own Phase 0 UI Revamp for the web storefront; this track is Storeapp's on-device equivalent, plus the tenant-driven theming plumbing neither repo has finished. `d.i`/`d.ii`/`d.iii` depend on Track c's `TenantConfig` (`1.c.ii.zi`/`1.c.ii.zo`, still open) for anything that needs to read tenant branding at runtime — leaves below are written to consume that once it lands, not to duplicate it.)*
+
+**d.i — Kill hardcoded branding**
+- [ ] d.i.zi — Inventory + replace every hardcoded "Vyxel Apps" / app-name literal with `TenantConfig.current.branding.displayName`. Confirmed sites this session: `strings.xml` (`app_name`), `AppComponents.kt:106`, `AppData.kt:1980` (download notification title), `AppScreens.kt:544/589/591/593` (share/feedback intents), `AppScreens.kt:1796` (settings hint text). Launcher name/icon stay out of scope — those are build-time (`1.c.i.zo`, Gradle flavors), not this leaf.
+- [ ] d.i.zo — Replace the hardcoded per-source color table (`AppSource` enum's `0xFF24292E`/`0xFF3F6791`/etc., `AppData.kt:47-53`) and `CustomThemeData`'s hardcoded default accent (`#D0BCFF`) with `TenantConfig.current.branding.primaryColorHex` as the seed for the app's Material color scheme. Per-source colors themselves become dead code once `d.ii` lands (sources stop being a UI-visible concept) — don't keep both.
+
+**d.ii — Canonical unified catalog (no source-branded UI)**
+- [ ] d.ii.zi — Remove `SourcesRow` (`AppComponents.kt:3331`) and the per-source browse shelves (`HomeScreen.kt:712-743` — `AppSource.FDROID -> item("fdroid_apps")`, etc.) as user-facing UI. `AppSource` stays as an internal routing/data field (converters, `zealotFirst`, `UpdateCheckWorker`'s bucket check all still need it) — this leaf is presentation-layer only, not a data-model change.
+- [ ] d.ii.zo — Dedup/merge layer: today each of the 8 sources contributes independent `GitHubRepo` entries even when they represent the same underlying app (no existing cross-source identity match was found this session — worth confirming again before building, not assumed). Define a merge key (package name is the obvious candidate, where available) so one canonical app card can represent multiple backing sources. **Flagged, not decided:** what a user sees when they tap "Install" on a merged card with more than one available source (silent pick-best? A picker?) needs an operator call before this leaf is buildable.
+- [ ] d.ii.iii — Remove every remaining source-name string shown to the user post-merge (`AppComponents.kt:2828-2835`'s `"View on GitLab"`/`"View on Codeberg"`/etc. labels, and any "via GitHub" / "via F-Droid" copy elsewhere) — confirm no orphaned strings survive `d.ii.zi`/`d.ii.zo`.
+
+**d.iii — Play Store visual/UX language**
+- [ ] d.iii.zi — Redesign the browse/home shell to Play Store's structure: top category tabs, hero/featured carousel, canonical unified rows in place of the per-source shelves `d.ii.zi` removed.
+- [ ] d.iii.zo — Redesign the app detail screen to Play Store's layout convention (hero banner, install CTA placement, ratings/reviews block, "About this app" section) — reusing `d.i`'s tenant color tokens, not a second hardcoded palette.
+- [ ] d.iii.iii — Search results restyled to match — canonical app cards only, no source badges, consistent with `d.ii`.
+
+**d.iv — Cross-tenant global catalog + first-party priority** *(operator-confirmed this session: an app published by any tenant becomes visible in every tenant's storefront — a shared/federated catalog — and the default/first-party tenant's apps always rank #1 in every tenant's display, everywhere)*
+- [ ] d.iv.zi — Federated catalog: an app published by any tenant becomes visible in every tenant's storefront (both D-Store's web listings and Storeapp's browse/search). This is new scope against `spec/tenant-config-schema.md` as it stands today — that schema currently gives each tenant its own separate `catalog_index_base_url`, no federation concept. This leaf needs a schema revision (v2, additive) or a separate aggregation layer above the per-tenant indexes — pick one before building, don't build both halfway.
+- [ ] d.iv.zo — Pin the default/first-party tenant's apps to rank #1 in *every* tenant's display, not just within their own catalog. Extends D-Store's existing `6.a.iii.zi` "first-party shelf pin" precedent, which only pins within one tenant's own catalog today — this needs the same pin to survive cross-tenant aggregation. Depends on `d.iv.zi` landing first (nothing to pin across tenants until the federation itself exists).
+
+### Track e — Multi-tenant notification infrastructure (email + push)
+*(Zealot-repo leaf, tracked here for visibility only — real checklist lives in Zealot's own `handover.md`, Task 37d, which builds on Task 16's already-live Novu email pipeline. `e.i` below is this repo's own consuming work.)*
+
+- [ ] e.i — Storeapp receives FCM push (device registration, token refresh handling) and replaces/augments `UpdateCheckWorker`'s local-only notification with tenant-branded remote push where available, falling back to local WorkManager checks where it isn't. *(maps to Zealot's `37d-iv`)* Confirmed this session via Novu's own docs: push is a native Novu channel (FCM/APNS/OneSignal providers, same trigger API and per-tenant integration model as the existing email pipeline) — this leaf is FCM SDK integration + device-token registration on the client, not a second parallel push backend.
+
 ---
 
 ## 2. Decisions on record
