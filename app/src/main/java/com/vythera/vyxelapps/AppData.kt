@@ -591,6 +591,64 @@ object IzzyOnDroidClient {
         }
 }
 
+// ── Zealot signed catalog index — fetch only (1.a.i.zo) ────────────────────────
+// Native port of D-Store's `lib/sources/zealot.ts` fetch step (its `fetchLiveIndex`),
+// same URLs, same "index is never its own trust anchor" posture. Deliberately scoped
+// to fetch only:
+//   - No signature/schema/freshness/rollback verification here — that's `1.a.ii.zi`,
+//     a native port of `zealot-trust.ts`'s pinned-key check, on purpose kept out of
+//     this object so nothing here can be mistaken for a trust decision.
+//   - No GitHubRepo conversion here — that's `1.a.ii.zo` (`ZealotEntry.toUnifiedRepo()`),
+//     which consumes this object's verified output, not its raw fetch.
+// `baseUrl` mirrors D-Store's `ZEALOT_CATALOG_INDEX_BASE_URL` env var: blank/unset means
+// "no live source configured yet," the same honest empty-result fallback `zealot.ts`
+// itself uses — not an error, and never silently falls back to some other source.
+object ZealotClient {
+    @Volatile var baseUrl: String = ""
+
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder()
+                .addHeader("User-Agent", "VyxelApps/1.0").build())
+        }.build()
+
+    /** Raw, not-yet-verified bytes of one fetch attempt. Signature verification (`1.a.ii.zi`) consumes this; nothing here checks it. */
+    data class RawIndexFetch(val indexText: String, val signatureText: String)
+
+    /**
+     * Fetches `index.json` + `index.json.sig` from `baseUrl`, same two URLs
+     * `zealot.ts`'s `fetchLiveIndex` requests. Returns null on a blank/unset
+     * `baseUrl`, any non-2xx response, or a network error — every failure
+     * collapses to the same "nothing fetched" outcome, same posture as the
+     * TS original, leaving the caller to fall back to its own last-known-good
+     * cache (that fallback isn't built by this leaf either).
+     */
+    suspend fun fetchIndex(): RawIndexFetch? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val base = baseUrl.trim().trimEnd('/')
+        if (base.isEmpty()) return@withContext null
+        try {
+            val indexReq = okhttp3.Request.Builder().url("$base/index.json").build()
+            val sigReq   = okhttp3.Request.Builder().url("$base/index.json.sig").build()
+            val indexDeferred = kotlinx.coroutines.async { http.newCall(indexReq).execute() }
+            val sigDeferred   = kotlinx.coroutines.async { http.newCall(sigReq).execute() }
+            val indexResp = indexDeferred.await()
+            val sigResp   = sigDeferred.await()
+            indexResp.use { iResp ->
+                sigResp.use { sResp ->
+                    if (!iResp.isSuccessful || !sResp.isSuccessful) return@withContext null
+                    val indexText = iResp.body?.string() ?: return@withContext null
+                    val sigText   = sResp.body?.string()?.trim() ?: return@withContext null
+                    RawIndexFetch(indexText, sigText)
+                }
+            }
+        } catch (_: Exception) {
+            null // network error -- caller falls back to its own cache, same as zealot.ts
+        }
+    }
+}
+
 // ── Preferences persistence ───────────────────────────────────────────────────
 class PreferencesManager(context: Context) {
     private val prefs = context.getSharedPreferences("vyxel_prefs", Context.MODE_PRIVATE)
