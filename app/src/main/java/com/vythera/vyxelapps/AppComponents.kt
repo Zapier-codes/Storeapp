@@ -103,7 +103,11 @@ fun TopBar(modifier: Modifier = Modifier) {
                         .clip(MaterialTheme.shapes.small)
                 )
                 Text(
-                    "Vyxel Apps",
+                    // d.i.zi: was hardcoded "Vyxel Apps" -- tenant display name now,
+                    // TenantConfig.current defaults to the seed record whose
+                    // displayName IS "Vyxel Apps" (TenantConfig.kt), so a device with
+                    // no tenant config fetched yet renders byte-identical to before.
+                    com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName,
                     style      = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color      = MaterialTheme.colorScheme.onSurface

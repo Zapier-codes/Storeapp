@@ -1990,7 +1990,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val dm  = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 val req = DownloadManager.Request(Uri.parse(asset.browser_download_url))
-                    .setTitle("Installing ${repo.name}").setDescription("Vyxel Apps")
+                    .setTitle("Installing ${repo.name}").setDescription(com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName)
                     .setDestinationUri(Uri.fromFile(outFile))
                     .setAllowedOverMetered(true).setAllowedOverRoaming(true)
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)

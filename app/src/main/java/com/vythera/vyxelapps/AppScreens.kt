@@ -541,7 +541,7 @@ fun ProfileScreen(
                                     .clickable {
                                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                                             data = Uri.parse("mailto:narzo9990@gmail.com")
-                                            putExtra(Intent.EXTRA_SUBJECT, "Vyxel Apps - Feedback")
+                                            putExtra(Intent.EXTRA_SUBJECT, "${com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName} - Feedback")
                                             putExtra(Intent.EXTRA_TEXT, "Hi,\n\n")
                                         }
                                         try { context.startActivity(intent) } catch (_: Exception) {}
@@ -584,13 +584,20 @@ fun ProfileScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        // d.i.zi: three literal "Vyxel Apps" mentions below
+                                        // (subject/body/chooser-title) now read the tenant
+                                        // display name -- TenantConfig.current defaults to
+                                        // the seed record whose displayName IS "Vyxel Apps",
+                                        // so a device with no tenant config fetched yet
+                                        // shares this exact text unchanged.
+                                        val brandName = com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName
                                         val share = Intent(Intent.ACTION_SEND).apply {
                                             type = "text/plain"
-                                            putExtra(Intent.EXTRA_SUBJECT, "Check out Vyxel Apps")
+                                            putExtra(Intent.EXTRA_SUBJECT, "Check out $brandName")
                                             putExtra(Intent.EXTRA_TEXT,
-                                                "Vyxel Apps — open-source GitHub-powered Android app store.\nhttps://github.com/NikhilKain/vyxel-apps")
+                                                "$brandName — open-source GitHub-powered Android app store.\nhttps://github.com/NikhilKain/vyxel-apps")
                                         }
-                                        context.startActivity(Intent.createChooser(share, "Share Vyxel Apps"))
+                                        context.startActivity(Intent.createChooser(share, "Share $brandName"))
                                     }
                                     .padding(14.dp),
                                 verticalAlignment     = Alignment.CenterVertically,
@@ -1793,7 +1800,7 @@ fun GitHubTokenOnboarding(
                         "Open github.com → Sign in to your account",
                         "Go to Settings → Developer settings → Personal access tokens → Tokens (classic)",
                         "Click \"Generate new token (classic)\"",
-                        "Add a note (e.g. \"Vyxel Apps\") and set an expiration",
+                        "Add a note (e.g. \"${com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName}\") and set an expiration",
                         "Under Scopes, check \"public_repo\" (no other scopes needed)",
                         "Click \"Generate token\" and copy it immediately"
                     )
