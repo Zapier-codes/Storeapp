@@ -2199,6 +2199,17 @@ fun AppDetailScreen(
     val s = LocalStrings.current
     var screenshotFullscreen by remember { mutableStateOf<Int?>(null) }
 
+    // d.iii.zo: hoisted above the LazyColumn — was previously computed just
+    // before the "Release / Asset selectors" item, further down. The
+    // Install/Download CTA is now moved up front (see below), right after the
+    // hero/stats band, to match Play Store's layout convention, and needs
+    // these too. Same derivation, just available earlier.
+    val allApkAssets = installState.release?.assets
+        ?.filter { it.name.endsWith(".apk", ignoreCase = true) } ?: emptyList()
+    val allOtherAssets: List<ReleaseAsset> = if (allApkAssets.isEmpty())
+        installState.release?.assets?.filter { !it.name.endsWith(".apk", ignoreCase = true) } ?: emptyList()
+    else emptyList()
+
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ScreenBackground(ScreenBg.HOME)
     Column(modifier = Modifier.fillMaxSize()) {
@@ -2248,18 +2259,31 @@ fun AppDetailScreen(
             contentPadding      = PaddingValues(bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // App icon + info header card (overlaps gradient)
+            // Hero band (d.iii.zo — Play Store layout convention: a feature-graphic-style
+            // banner behind the icon/title, not a plain card floating on the generic
+            // screen background). No per-app feature-graphic image exists in the data
+            // model (GitHubRepo has no banner/hero-image field, across all 8 sources),
+            // so the banner itself is a gradient rather than a photo — built from the
+            // same tenant-branding tokens `d.i.zo` already seeds the app's whole color
+            // scheme from (`t.accent`/`t.accentAlt`, from `LocalTheme.current`), not a
+            // second hardcoded palette. Revisit with a real image once/if a source ever
+            // supplies one (Zealot's `ZealotListing` doesn't today either).
             item {
-                ElevatedCard(
-                    modifier  = Modifier
+                Box(
+                    modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .padding(top = 12.dp),
-                    shape     = MaterialTheme.shapes.extraLarge,
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
-                    colors    = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                        .padding(top = 12.dp)
+                        .clip(MaterialTheme.shapes.extraLarge)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    t.accent.copy(alpha = 0.24f),
+                                    t.accentAlt.copy(alpha = 0.10f),
+                                    MaterialTheme.colorScheme.surface
+                                )
+                            )
+                        )
                 ) {
                     Row(
                         modifier              = Modifier
@@ -2288,7 +2312,7 @@ fun AppDetailScreen(
                                 contentScale       = ContentScale.Crop
                             )
                         }
-                        // Name + stats
+                        // Name only — stats moved to their own band below (see next item)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "@${repo.owner.login}",
@@ -2317,32 +2341,257 @@ fun AppDetailScreen(
                                     )
                                 )
                             }
-                            Spacer(Modifier.height(8.dp))
-                            // Stars | Forks | Language
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.Star, null, tint = StarGold, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(3.dp))
+                        }
+                    }
+                }
+            }
+
+            // Stats band (d.iii.zo) — Play Store puts a ratings/reviews summary here,
+            // directly under the hero. This catalog has no such data: no accounts, no
+            // review submission or storage, no per-app 1-5 rating anywhere in the model
+            // (checked this session — the only near-miss is Zealot's `content_rating`,
+            // which is an age/content classification, not a user rating). Per the
+            // program's own storage split (Storeapp `HANDOVER.md` Decisions on record,
+            // "GitHub Releases is the sole artifact store…"; D-store's own Supabase
+            // holds "ratings, reviews, counters, abuse reports" for apps published
+            // through that pipeline) building a real ratings/reviews system for this
+            // native client is new, separately-scoped work against a backend this repo
+            // doesn't call today — flagged forward, not built here. What ships instead:
+            // the two real per-app metrics every source already provides (stars, forks),
+            // pulled out of the hero into their own prominent Play-Store-sized band and
+            // shown under their own honest names — never relabeled as a "Rating" they
+            // aren't.
+            item {
+                Row(
+                    modifier              = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Star, null, tint = StarGold, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                formatStars(repo.stargazers_count),
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text("Stars", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    VerticalDivider(modifier = Modifier.height(30.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.ForkRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                formatStars(repo.forks_count),
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text("Forks", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!repo.language.isNullOrBlank()) {
+                        VerticalDivider(modifier = Modifier.height(30.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                repo.language,
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text("Language", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
+            // Action buttons (includes download progress when active) — d.iii.zo:
+            // moved up here, immediately under the hero/stats band and above "About
+            // this app", to match Play Store's install-CTA placement (visible without
+            // scrolling past the description/release notes, not buried below them as
+            // it was before this leaf). onInstall always acts on installState.apkAsset,
+            // which already defaults to the latest APK asset of the latest release —
+            // the release/asset picker (still further down, unmoved) is an optional
+            // override for a different version, never a precondition for this button.
+            item {
+                Column(
+                    modifier            = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val canInstall = installState.apkAsset != null &&
+                            installState.apkAsset!!.name.endsWith(".apk", ignoreCase = true) &&
+                            installState.downloadProgress == null &&
+                            !installState.isInstalled
+                    val canDownloadNonApk = allApkAssets.isEmpty() &&
+                            installState.apkAsset != null &&
+                            installState.downloadProgress == null
+
+                    if (installState.downloadProgress != null) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier              = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(s.downloading, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
-                                    formatStars(repo.stargazers_count),
-                                    style      = MaterialTheme.typography.labelLarge,
-                                    color      = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium
+                                    "${(installState.downloadProgress * 100).toInt()}%",
+                                    style      = MaterialTheme.typography.bodyMedium,
+                                    color      = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
                                 )
-                                VerticalDivider(modifier = Modifier.height(14.dp).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                                Icon(Icons.Rounded.ForkRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text(formatStars(repo.forks_count), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (!repo.language.isNullOrBlank()) {
-                                    VerticalDivider(modifier = Modifier.height(14.dp).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                                    Text(repo.language, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment     = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                LinearProgressIndicator(
+                                    progress   = { installState.downloadProgress },
+                                    modifier   = Modifier
+                                        .weight(1f)
+                                        .clip(MaterialTheme.shapes.small),
+                                    color      = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(RedDanger.copy(0.12f))
+                                        .clickable { onCancelDownload() },
+                                    Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Close, "Cancel",
+                                        tint     = RedDanger,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
+                            }
+                        }
+                    } else if (canInstall) {
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick  = onDownloadOnly,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp),
+                                shape    = MaterialTheme.shapes.large
+                            ) {
+                                Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(s.download, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+                            }
+                            Button(
+                                onClick  = onInstall,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp),
+                                shape    = MaterialTheme.shapes.large
+                            ) {
+                                Icon(Icons.Rounded.InstallMobile, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(s.install, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else if (canDownloadNonApk) {
+                        Button(
+                            onClick  = onDownloadOnly,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape    = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(s.download, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    val viewUrl = when {
+                        repo.html_url.isNotBlank() -> repo.html_url
+                        repo.source == AppSource.FDROID   -> "https://f-droid.org/packages/${repo.full_name}/"
+                        repo.source == AppSource.FLATHUB  -> "https://flathub.org/apps/${repo.full_name}"
+                        repo.source == AppSource.WINGET   -> "https://winget.run/pkg/${repo.full_name}"
+                        else -> ""
+                    }
+                    if (viewUrl.isNotBlank()) {
+                        // d.ii.iii: source-agnostic label (canonical unified catalog,
+                        // no source-branded UI) — reuses s.openInBrowser, same as
+                        // FeaturedCard's pill button.
+                        FilledTonalButton(
+                            onClick  = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(viewUrl)))
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape    = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Rounded.OpenInBrowser, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(s.openInBrowser, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick  = onCompare,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape    = MaterialTheme.shapes.large
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.CompareArrows, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Compare with another app", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+                    }
+
+                    if (installState.isInstalled) {
+                        Button(
+                            onClick  = onUninstall,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape    = MaterialTheme.shapes.large,
+                            colors   = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Rounded.Delete, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(s.uninstall, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                        if (installState.apkAsset != null) {
+                            OutlinedButton(
+                                onClick  = onInstall,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape    = MaterialTheme.shapes.large
+                            ) {
+                                Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Reinstall / Update", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
                 }
             }
 
-            // About section
+            // About section — Play Store calls this "About this app"; kept as the
+            // existing localized `s.about` heading instead (d.iii.zo) rather than
+            // forking a second, English-only "About this app" string that would
+            // leave all ~15 other locales in `AppStrings.kt` showing stale/untranslated
+            // text for this one heading — a full-locale addition is real scope beyond
+            // a layout leaf and risks a compile break I can't check in-sandbox (no
+            // Android SDK/Gradle here). Flagged forward as its own small leaf if the
+            // literal Play Store wording is wanted badly enough to touch every locale.
             item {
                 Column(
                     modifier = Modifier
@@ -2562,11 +2811,7 @@ fun AppDetailScreen(
             }
 
             // Release / Asset selectors  — two dropdowns side by side
-            val allApkAssets = installState.release?.assets
-                ?.filter { it.name.endsWith(".apk", ignoreCase = true) } ?: emptyList()
-            val allOtherAssets: List<ReleaseAsset> = if (allApkAssets.isEmpty())
-                installState.release?.assets?.filter { !it.name.endsWith(".apk", ignoreCase = true) } ?: emptyList()
-            else emptyList()
+            // (allApkAssets/allOtherAssets now hoisted above the LazyColumn — d.iii.zo)
             if (installState.releases.size > 1 || allApkAssets.isNotEmpty() || allOtherAssets.isNotEmpty()) {
                 item {
                     var showReleaseMenu by remember { mutableStateOf(false) }
@@ -2752,173 +2997,6 @@ fun AppDetailScreen(
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Action buttons (includes download progress when active)
-            item {
-                Column(
-                    modifier            = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    val canInstall = installState.apkAsset != null &&
-                            installState.apkAsset!!.name.endsWith(".apk", ignoreCase = true) &&
-                            installState.downloadProgress == null &&
-                            !installState.isInstalled
-                    val canDownloadNonApk = allApkAssets.isEmpty() &&
-                            installState.apkAsset != null &&
-                            installState.downloadProgress == null
-
-                    if (installState.downloadProgress != null) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier              = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(s.downloading, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    "${(installState.downloadProgress * 100).toInt()}%",
-                                    style      = MaterialTheme.typography.bodyMedium,
-                                    color      = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Row(
-                                verticalAlignment     = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                LinearProgressIndicator(
-                                    progress   = { installState.downloadProgress },
-                                    modifier   = Modifier
-                                        .weight(1f)
-                                        .clip(MaterialTheme.shapes.small),
-                                    color      = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                                Box(
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(RedDanger.copy(0.12f))
-                                        .clickable { onCancelDownload() },
-                                    Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Close, "Cancel",
-                                        tint     = RedDanger,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    } else if (canInstall) {
-                        Row(
-                            modifier              = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick  = onDownloadOnly,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(52.dp),
-                                shape    = MaterialTheme.shapes.large
-                            ) {
-                                Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(s.download, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-                            }
-                            Button(
-                                onClick  = onInstall,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(52.dp),
-                                shape    = MaterialTheme.shapes.large
-                            ) {
-                                Icon(Icons.Rounded.InstallMobile, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(s.install, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else if (canDownloadNonApk) {
-                        Button(
-                            onClick  = onDownloadOnly,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape    = MaterialTheme.shapes.large
-                        ) {
-                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(s.download, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    val viewUrl = when {
-                        repo.html_url.isNotBlank() -> repo.html_url
-                        repo.source == AppSource.FDROID   -> "https://f-droid.org/packages/${repo.full_name}/"
-                        repo.source == AppSource.FLATHUB  -> "https://flathub.org/apps/${repo.full_name}"
-                        repo.source == AppSource.WINGET   -> "https://winget.run/pkg/${repo.full_name}"
-                        else -> ""
-                    }
-                    if (viewUrl.isNotBlank()) {
-                        // d.ii.iii: source-agnostic label (canonical unified catalog,
-                        // no source-branded UI) — reuses s.openInBrowser, same as
-                        // FeaturedCard's pill button.
-                        FilledTonalButton(
-                            onClick  = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(viewUrl)))
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape    = MaterialTheme.shapes.large
-                        ) {
-                            Icon(Icons.Rounded.OpenInBrowser, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(s.openInBrowser, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick  = onCompare,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape    = MaterialTheme.shapes.large
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.CompareArrows, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Compare with another app", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-                    }
-
-                    if (installState.isInstalled) {
-                        Button(
-                            onClick  = onUninstall,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape    = MaterialTheme.shapes.large,
-                            colors   = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Rounded.Delete, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(s.uninstall, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        }
-                        if (installState.apkAsset != null) {
-                            OutlinedButton(
-                                onClick  = onInstall,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp),
-                                shape    = MaterialTheme.shapes.large
-                            ) {
-                                Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Reinstall / Update", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
