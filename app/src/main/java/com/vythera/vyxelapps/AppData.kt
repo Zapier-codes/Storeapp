@@ -72,7 +72,22 @@ data class GitHubRepo(
      *  -> `toUnifiedRepo()` is the only path that ever produces an `AppSource.ZEALOT` `GitHubRepo`). */
     val claimedSha256: String? = null,
     /** Source-claimed signing-certificate fingerprint -- same gating and same "null unless Zealot" posture as [claimedSha256]. */
-    val claimedSigningFingerprint: String? = null
+    val claimedSigningFingerprint: String? = null,
+    /** `d.ii.zo`: real Android package identifier (e.g. `com.example.app`), when the source's own
+     *  browse-time data actually carries one -- today that's F-Droid (`AppEntry`, source=fdroid),
+     *  IzzyOnDroid, and Zealot only. `null` for GitHub/GitLab/Codeberg (git-hosting sources with no
+     *  package identity until an APK is actually downloaded and parsed -- see
+     *  `InstallState.packageName`, a different, post-download field) and deliberately `null` for
+     *  Flathub/Winget too, even though both carry a real dotted id of their own: those are
+     *  Linux/Windows package namespaces, not Android's, and this field exists specifically to key
+     *  [dedupeByPackage]'s merge -- conflating a different OS's package identity space into the same
+     *  key space is a false-merge risk this field is never populated into. */
+    val packageName: String? = null,
+    /** `d.ii.zo`: the other source(s) [dedupeByPackage] found for the same [packageName], with this
+     *  entry chosen as canonical. `null` (not empty) when this entry never went through a merge --
+     *  the overwhelming majority, since only three sources ever populate [packageName]. Never itself
+     *  containing another entry with a non-null `mergedSources` (dedup collapses one level only). */
+    val mergedSources: List<GitHubRepo>? = null
 )
 data class RepoOwner(val login: String = "", val avatar_url: String = "")
 data class SearchResponse(val items: List<GitHubRepo> = emptyList())
@@ -432,6 +447,12 @@ fun AppEntry.toGitHubRepo(): GitHubRepo {
             "https://f-droid.org/packages/$pkg"
         else -> homepage
     }
+    // d.ii.zo: `pkg` is a real Android package id only for the fdroid source (F-Droid's index is
+    // exclusively Android APKs, same identity space IzzyOnDroid/Zealot use); winget/flathub/gitlab/
+    // codeberg/github all route through this same converter but deliberately don't get a
+    // `packageName` here -- see the field's own doc comment on `GitHubRepo` for why.
+    val mergePackageName = if (source == "fdroid") pkg.takeIf { it.isNotBlank() } else null
+
     return GitHubRepo(
         id               = repoId,
         name             = name,
@@ -442,7 +463,8 @@ fun AppEntry.toGitHubRepo(): GitHubRepo {
         owner            = RepoOwner(login = owner, avatar_url = icon),
         source           = appSource,
         apkUrl           = apkUrl,
-        cdnVersion       = version
+        cdnVersion       = version,
+        packageName      = mergePackageName
     )
 }
 
@@ -601,7 +623,10 @@ object IzzyOnDroidClient {
                             login      = app.packageName.substringAfterLast("."),
                             avatar_url = icon
                         ),
-                        source           = AppSource.IZZY
+                        source           = AppSource.IZZY,
+                        // d.ii.zo: IzzyOnDroid mirrors F-Droid's index format -- a real Android
+                        // package id, same identity space as `fdroid`/`zealot`'s `packageName`.
+                        packageName      = app.packageName
                     )
                 }
                 cache   = result
@@ -1100,6 +1125,57 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return zealot + rest.sortedByDescending { it.stargazers_count }
     }
 
+    // ── d.ii.zo: dedup/merge layer ──────────────────────────────────────────────
+    // Collapses entries that share a real `packageName` (only F-Droid/IzzyOnDroid/Zealot ever
+    // set one -- see that field's own doc comment on `GitHubRepo`) into one canonical card, so
+    // the same open-source Android app listed on more than one of those three doesn't show as
+    // separate rows/results. Wired into the same four merge points `zealotFirst` already runs at
+    // (`openSourceBrowse`'s `mergeSource`, both of `onSearch`'s local-match branches, and its
+    // async live-search `merge`) -- always as `zealotFirst(dedupeByPackage(...))`, dedup first so
+    // `zealotFirst`'s ordering sees one row per app, not a duplicate that happens to also be the
+    // Zealot copy. Deliberately NOT wired into `HomeScreen.kt`'s home-shelf `trendingWithZealot`
+    // prepend, since that surface never went through `zealotFirst` either (`1.a.iii.zi`'s own Done
+    // note: it's a separate render-time `distinctBy { it.id }` prepend, not a `zealotFirst` call
+    // site) -- flagged forward for `d.iii.zi`'s home-shell redesign to route through this too.
+
+    /**
+     * Operator decision on record (`HANDOVER.md` Section 2): a merged card's "Install" tap
+     * silently uses whichever backing entry becomes canonical here -- no picker. This function IS
+     * that decision's implementation, not just the merge key -- `canonical`'s own `apkUrl`/
+     * `claimedSha256`/`claimedSigningFingerprint` are exactly what `downloadAndInstall` already
+     * reads off a single `GitHubRepo`, so nothing downstream needs to change to act on the pick.
+     *
+     * Canonical-pick priority: a Zealot entry, if the group has one (already signature-verified,
+     * `1.a.ii.zi`, and the only one of the three with a checksum/signing-fingerprint claim
+     * `InstallGateway` can actually check) — else the highest `stargazers_count` in the group,
+     * reusing `zealotFirst`'s own "stars rank everything that isn't Zealot" rule rather than
+     * inventing a second ranking. **Deliberately not "freshest version," despite that being this
+     * leaf's original recommendation:** no reliable cross-source version comparison exists today
+     * -- `cdnVersion`/`ZealotVersion.version_name` are free-form strings from three different
+     * publishers, not a shared semver contract, and IzzyOnDroid's own converter never sets
+     * `cdnVersion` at all. Flagged forward: a real freshness comparison needs each source to
+     * commit to a comparable version scheme first, which is out of this leaf's scope.
+     */
+    private fun dedupeByPackage(list: List<GitHubRepo>): List<GitHubRepo> {
+        // Every entry gets a group key: a real `packageName` groups by that (normalized so
+        // formatting quirks between sources never cause a false split); an entry with none gets a
+        // synthetic key unique to its own position (`\u0000` prefix so it can never collide with a
+        // real package name), so it always lands in its own singleton group and passes through
+        // untouched, same "no packageName, no merge" posture the field's own doc comment states.
+        val groups = LinkedHashMap<String, MutableList<GitHubRepo>>()
+        list.forEachIndexed { index, repo ->
+            val key = repo.packageName?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: "\u0000$index"
+            groups.getOrPut(key) { mutableListOf() }.add(repo)
+        }
+        return groups.values.map { group ->
+            if (group.size == 1) return@map group[0]
+            val canonical = group.firstOrNull { it.source == AppSource.ZEALOT }
+                ?: group.maxByOrNull { it.stargazers_count }
+                ?: group.first()
+            canonical.copy(mergedSources = group - canonical)
+        }
+    }
+
     /**
      * Which of the already-loaded `state.zealotApps` are relevant to a collection/category
      * query string (e.g. `"topic:android privacy"`). Zealot's index carries no `topic:` tags
@@ -1175,7 +1251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // other source's tab with no Zealot entries in play at all) ahead of the
                     // stars-sort — a strict superset of the old plain sortedByDescending.
                     state = state.copy(
-                        seeAllApps      = zealotFirst(state.seeAllApps + fresh),
+                        seeAllApps      = zealotFirst(dedupeByPackage(state.seeAllApps + fresh)),
                         isLoadingSeeAll = false
                     )
                 }
@@ -1682,11 +1758,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         val localMatches = if (q.isNotBlank()) {
             val qt = q.trim().lowercase()
-            zealotFirst(allNormalized.filter { repo ->
+            zealotFirst(dedupeByPackage(allNormalized.filter { repo ->
                 fuzzyMatch(repo.name, qt) ||
                         fuzzyMatch(repo.owner.login, qt) ||
                         (!repo.description.isNullOrEmpty() && fuzzyMatch(repo.description, qt))
-            })
+            }))
         } else {
             // No text — show loaded apps that match the active platform filter
             val platformSources: Set<AppSource>? = when (state.platform) {
@@ -1700,7 +1776,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 else                -> null   // ALL with no text → keep empty (default state)
             }
             if (platformSources != null)
-                zealotFirst(allNormalized.filter { it.source in platformSources })
+                zealotFirst(dedupeByPackage(allNormalized.filter { it.source in platformSources }))
             else emptyList()
         }
 
@@ -1719,7 +1795,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val fresh = newItems.filter { seen.add(it.id) }
                 if (fresh.isEmpty()) return
                 state = state.copy(
-                    searchResults = zealotFirst(state.searchResults + fresh)
+                    searchResults = zealotFirst(dedupeByPackage(state.searchResults + fresh))
                 )
             }
 

@@ -158,6 +158,12 @@ fun ZealotEntry.toUnifiedRepo(): GitHubRepo {
         apkUrl           = latest?.download_url ?: "",
         cdnVersion       = latest?.version_name ?: "",
         claimedSha256             = latest?.sha256,
-        claimedSigningFingerprint = latest?.signing_fingerprint
+        claimedSigningFingerprint = latest?.signing_fingerprint,
+        // d.ii.zo: Zealot's own `package_name` is a real Android package id -- the same identity
+        // space `fdroid`/`izzy` populate `GitHubRepo.packageName` from -- and, unlike those two,
+        // it's already passed through `1.a.ii.zi`'s signature verification by the time it gets here
+        // (only `resolveVerifiedIndex()`'s output ever reaches this converter), so it's the
+        // highest-trust package claim of the three when `dedupeByPackage` has to pick a canonical.
+        packageName               = package_name?.takeIf { it.isNotBlank() }
     )
 }
