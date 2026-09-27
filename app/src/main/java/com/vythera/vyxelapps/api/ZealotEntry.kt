@@ -82,7 +82,14 @@ data class ZealotEntry(
     val created_at   : String         = "",
     val updated_at   : String         = "",
     /** Newest first — matches Zealot's own documented `App#catalog_releases` order, so `versions.firstOrNull()` (never a re-sort here) is always the latest, same assumption `zealot.ts` makes. */
-    val versions     : List<ZealotVersion> = emptyList()
+    val versions     : List<ZealotVersion> = emptyList(),
+    /** `d.iv.zi`: which tenant published this entry. `null` on a tenant's own single-tenant
+     *  `index.json` — every entry there is implicitly that tenant's own, no self-identification
+     *  needed. Populated on `FederatedCatalogClient`'s aggregated index, where entries from every
+     *  tenant are mixed together and need to say whose app each one is. Additive field — an older
+     *  reader that never looks at it still parses a federated entry fine, same "unrecognized field
+     *  is safely ignorable" posture `tenant-config-schema.md`'s own versioning policy commits to. */
+    val tenant_id    : String?        = null
 )
 
 /** The index's top-level `apps` array — only the one field this leaf needs; `schema_version`/`sequence`/`expires_at` are `1.a.ii.zi`'s `IndexEnvelope`'s job, not re-declared here. */
@@ -164,6 +171,13 @@ fun ZealotEntry.toUnifiedRepo(): GitHubRepo {
         // it's already passed through `1.a.ii.zi`'s signature verification by the time it gets here
         // (only `resolveVerifiedIndex()`'s output ever reaches this converter), so it's the
         // highest-trust package claim of the three when `dedupeByPackage` has to pick a canonical.
-        packageName               = package_name?.takeIf { it.isNotBlank() }
+        packageName               = package_name?.takeIf { it.isNotBlank() },
+        // d.iv.zi: carries a federated entry's origin tenant through to the unified card. `null`
+        // for every entry parsed off a tenant's own single-tenant index (the overwhelming
+        // majority today, since no federation endpoint is configured anywhere in this program
+        // yet) — same "field exists, mostly null until its producer is real" posture
+        // `claimedSha256`/`claimedSigningFingerprint` started with before any source populated
+        // them.
+        originTenantId            = tenant_id
     )
 }

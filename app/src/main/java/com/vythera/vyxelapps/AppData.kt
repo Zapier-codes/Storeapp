@@ -87,7 +87,18 @@ data class GitHubRepo(
      *  entry chosen as canonical. `null` (not empty) when this entry never went through a merge --
      *  the overwhelming majority, since only three sources ever populate [packageName]. Never itself
      *  containing another entry with a non-null `mergedSources` (dedup collapses one level only). */
-    val mergedSources: List<GitHubRepo>? = null
+    val mergedSources: List<GitHubRepo>? = null,
+    /** `d.iv.zi`: which tenant published this entry, when known. `null` for every one of the
+     *  other seven sources and for a Zealot entry parsed off a tenant's own single-tenant index
+     *  (implicitly that tenant's own — no need to say so). Populated only for an entry that came
+     *  from `FederatedCatalogClient`'s aggregated index (`ZealotEntry.tenant_id`, via
+     *  `toUnifiedRepo()`), where it's the one signal that tells a federated app apart from a
+     *  locally-published one. Not read by [dedupeByPackage] on purpose — a federated copy and the
+     *  same app's own-tenant copy share one `packageName` and should still collapse to one card
+     *  regardless of which tenant either claims, same as any other duplicate. `d.iv.zo` (still
+     *  open) is the leaf that gives this field an actual reader, for ranking the default tenant's
+     *  own apps #1 across every tenant's display. */
+    val originTenantId: String? = null
 )
 data class RepoOwner(val login: String = "", val avatar_url: String = "")
 data class SearchResponse(val items: List<GitHubRepo> = emptyList())
@@ -253,6 +264,11 @@ data class UiState(
     // 1.a.iii.zi: Zealot's verified, converted apps — loaded once in loadAll() (same as the
     // other six *Apps lists above) and reused from here by every prepend-first merge site
     // (openSourceBrowse, category browsing, search) rather than each re-fetching it.
+    // d.iv.zi: as of this leaf, populated by `fetchZealotApps()` from BOTH the tenant's own
+    // Zealot index AND FederatedCatalogClient's aggregated index, already deduped by package —
+    // every existing reader of this field (zealotFirst, matchingZealotApps, search, the home
+    // shelf) keeps working unchanged, since a federated entry is still just an AppSource.ZEALOT
+    // GitHubRepo, now optionally carrying `originTenantId`.
     val zealotApps          : List<GitHubRepo>        = emptyList(),
     val selfUpdateInfo      : SelfUpdateInfo?         = null,
     val selfUpdateDismissed : Boolean                 = false,
@@ -1097,14 +1113,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Collapses "no baseUrl configured" / "nothing ever verified on this device" / any
      * parse failure to an empty list, same "never throw, empty is a valid state" posture
      * every other CDN source in this file already uses.
+     *
+     * `d.iv.zi`: also fetches `FederatedCatalogClient`'s own verified index the same way, in
+     * parallel with the tenant's own — the two are independent trust domains (see that client's
+     * own header comment) so one failing never blocks the other. Both convert through the exact
+     * same `ZealotEntry.toUnifiedRepo()`, since a federated index is the same `apps: [...]`
+     * shape as a tenant's own, just with `tenant_id` populated per entry. **Deliberately merged
+     * through `dedupeByPackage` right here, not left for every call site to do separately:**
+     * this function is the one place both indexes are ever combined, so it's also the one place
+     * that has to guarantee a device's own app doesn't show up twice just because a federation
+     * index that includes every tenant's apps (including this device's own tenant) happens to
+     * list it too — `dedupeByPackage` already collapses same-`packageName` entries for exactly
+     * this reason (a federated copy and an own-tenant copy of the same app share one real Android
+     * package id), so nothing downstream needs to know federation exists at all; every one of
+     * `zealotApps`' existing consumers (`zealotFirst`, `matchingZealotApps`, search, the home
+     * shelf) already treats this list as "Zealot-sourced apps," unchanged.
      */
-    private suspend fun fetchZealotApps(): List<GitHubRepo> =
-        try {
-            ZealotClient.resolveVerifiedIndex(ctx)
-                ?.let { com.vythera.vyxelapps.api.parseZealotEntries(it) }
-                ?.map { it.toUnifiedRepo() }
-                ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+    private suspend fun fetchZealotApps(): List<GitHubRepo> = try {
+        kotlinx.coroutines.coroutineScope {
+            val ownDeferred = async {
+                try {
+                    ZealotClient.resolveVerifiedIndex(ctx)
+                        ?.let { com.vythera.vyxelapps.api.parseZealotEntries(it) }
+                        ?.map { it.toUnifiedRepo() }
+                        ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+            }
+            val federatedDeferred = async {
+                try {
+                    com.vythera.vyxelapps.api.FederatedCatalogClient.resolveVerifiedIndex(ctx)
+                        ?.let { com.vythera.vyxelapps.api.parseZealotEntries(it) }
+                        ?.map { it.toUnifiedRepo() }
+                        ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+            }
+            dedupeByPackage(ownDeferred.await() + federatedDeferred.await())
+        }
+    } catch (_: Exception) { emptyList() }
 
     /**
      * Pins any `AppSource.ZEALOT` entries in `list` at the very front — prepended, never
