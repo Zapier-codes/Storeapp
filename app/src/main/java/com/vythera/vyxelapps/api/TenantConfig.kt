@@ -73,9 +73,17 @@ data class TenantBranding(
  */
 const val DEFAULT_CDN_BASE = "https://nikhilkain.github.io/appstore-metadata"
 
+/**
+ * `d.iv.zo`: the `tenant_id` of the first-party/default tenant, pinned client-side rather than read
+ * from any fetched record's `is_default_tenant` flag -- that flag is informational only, never a
+ * trust signal (`spec/tenant-config-schema.md`), so ranking must not key off it. Same value as
+ * [TenantConfigData.tenantId]'s compiled-in default (the seed tenant).
+ */
+const val FIRST_PARTY_TENANT_ID = "default"
+
 data class TenantConfigData(
     @SerializedName("schema_version")         val schemaVersion: Int = 1,
-    @SerializedName("tenant_id")              val tenantId: String = "default",
+    @SerializedName("tenant_id")              val tenantId: String = FIRST_PARTY_TENANT_ID,
     @SerializedName("generated_at")           val generatedAt: String = "",
     @SerializedName("sequence")               val sequence: Int = 0,
     @SerializedName("expires_at")             val expiresAt: String = "",

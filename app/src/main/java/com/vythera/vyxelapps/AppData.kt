@@ -95,9 +95,8 @@ data class GitHubRepo(
      *  `toUnifiedRepo()`), where it's the one signal that tells a federated app apart from a
      *  locally-published one. Not read by [dedupeByPackage] on purpose — a federated copy and the
      *  same app's own-tenant copy share one `packageName` and should still collapse to one card
-     *  regardless of which tenant either claims, same as any other duplicate. `d.iv.zo` (still
-     *  open) is the leaf that gives this field an actual reader, for ranking the default tenant's
-     *  own apps #1 across every tenant's display. */
+     *  regardless of which tenant either claims, same as any other duplicate. `d.iv.zo` is the reader:
+     *  `isFirstParty` ranks the default tenant's apps #1 across every tenant's display. */
     val originTenantId: String? = null
 )
 data class RepoOwner(val login: String = "", val avatar_url: String = "")
@@ -1147,7 +1146,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         ?: emptyList()
                 } catch (_: Exception) { emptyList() }
             }
-            dedupeByPackage(ownDeferred.await() + federatedDeferred.await())
+            // d.iv.zo: first-party apps lead `zealotApps` itself, so the home shelf's render-time
+            // prepend and `matchingZealotApps` (both order-preserving) inherit the pin too.
+            firstPartyFirst(dedupeByPackage(ownDeferred.await() + federatedDeferred.await()))
         }
     } catch (_: Exception) { emptyList() }
 
@@ -1162,7 +1163,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun zealotFirst(list: List<GitHubRepo>): List<GitHubRepo> {
         val (zealot, rest) = list.partition { it.source == AppSource.ZEALOT }
-        return zealot + rest.sortedByDescending { it.stargazers_count }
+        return firstPartyFirst(zealot) + rest.sortedByDescending { it.stargazers_count }
+    }
+
+    /**
+     * `d.iv.zo`: true when this entry was published by the first-party/default tenant. An entry with
+     * no `originTenantId` came off this device's own tenant index (implicitly that tenant's own),
+     * so its effective origin is the running tenant's id; a federated entry states its own.
+     * Compared against the pinned [com.vythera.vyxelapps.api.FIRST_PARTY_TENANT_ID], never against
+     * `is_default_tenant` (informational only, not a trust signal).
+     */
+    private fun isFirstParty(repo: GitHubRepo): Boolean =
+        repo.source == AppSource.ZEALOT &&
+            (repo.originTenantId ?: com.vythera.vyxelapps.api.TenantConfig.current.tenantId) ==
+                com.vythera.vyxelapps.api.FIRST_PARTY_TENANT_ID
+
+    /** `d.iv.zo`: stable partition -- first-party entries lead, everything else keeps its relative order. */
+    private fun firstPartyFirst(list: List<GitHubRepo>): List<GitHubRepo> {
+        val (first, rest) = list.partition { isFirstParty(it) }
+        return first + rest
     }
 
     // ── d.ii.zo: dedup/merge layer ──────────────────────────────────────────────
@@ -1209,7 +1228,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         return groups.values.map { group ->
             if (group.size == 1) return@map group[0]
-            val canonical = group.firstOrNull { it.source == AppSource.ZEALOT }
+            // d.iv.zo: among Zealot copies prefer the first-party one, so a federated first-party
+            // entry is never shadowed by a same-package own-tenant copy that would lose the pin.
+            val canonical = group.firstOrNull { isFirstParty(it) }
+                ?: group.firstOrNull { it.source == AppSource.ZEALOT }
                 ?: group.maxByOrNull { it.stargazers_count }
                 ?: group.first()
             canonical.copy(mergedSources = group - canonical)
