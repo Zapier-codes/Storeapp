@@ -21,6 +21,7 @@ class VyxelApp : Application(), ImageLoaderFactory {
         super.onCreate()
         createNotificationChannel()
         scheduleUpdateChecks()
+        com.vythera.vyxelapps.api.PushRegistrar.init(this)
     }
 
     override fun newImageLoader() = ImageLoader.Builder(this)

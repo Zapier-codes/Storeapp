@@ -19,6 +19,15 @@ android {
         versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // e.i: push config, blank by default = push disabled (see api/PushRegistrar.kt). Supplied
+        // via Gradle properties (-PfcmProjectId=... or ~/.gradle/gradle.properties), never committed.
+        fun prop(name: String) = (project.findProperty(name) as String? ?: "").replace("\"", "")
+        buildConfigField("String", "FCM_PROJECT_ID", "\"${prop("fcmProjectId")}\"")
+        buildConfigField("String", "FCM_APP_ID", "\"${prop("fcmAppId")}\"")
+        buildConfigField("String", "FCM_API_KEY", "\"${prop("fcmApiKey")}\"")
+        buildConfigField("String", "FCM_SENDER_ID", "\"${prop("fcmSenderId")}\"")
+        buildConfigField("String", "PUSH_REGISTRATION_URL", "\"${prop("pushRegistrationUrl")}\"")
     }
 
     // Packaging-identity-only product flavors -- leaf `1.c.i.zo`. One flavor per distributable
@@ -65,6 +74,10 @@ dependencies {
     implementation("com.airbnb.android:lottie-compose:6.4.0")
 
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // e.i: FCM. Options are supplied programmatically (no google-services plugin / json).
+    implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.core:core-ktx:1.13.1")
 

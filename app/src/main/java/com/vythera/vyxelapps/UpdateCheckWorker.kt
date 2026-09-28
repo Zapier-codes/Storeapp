@@ -83,6 +83,6 @@ class UpdateCheckWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
             .build()
 
         val mgr = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        mgr.notify(2024, notif)
+        mgr.notify(UPDATE_NOTIFICATION_TAG, UPDATE_NOTIFICATION_ID, notif)
     }
 }
