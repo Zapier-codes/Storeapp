@@ -18,6 +18,36 @@ This repo is the on-device client in the same program as `D-Store` (public store
 
 **Program now spans six repos, not three (recorded this session, see Track f):** `distr` (`github.com/Zapier-codes/distr`, a fork of the open-source Distr software-distribution platform — Go/chi backend, Angular frontend, `Organization`/`CustomerOrganization`/branding/notification machinery already built) is adopted as the public, no-signup **request-a-product front door** for the whole multi-tenant fleet — not a Zealot responsibility, see the operator correction in Track f's own header. `Edges_LandingPage` (`github.com/Edges-Enterprise/Edges_LandingPage`) is not part of the shipped program — it is a **reference implementation only**, read this session to confirm a working request → provision → CI-build → deliver loop (`triggerAppBuild.ts` dispatching a `workflow_dispatch` call, `build-config`/`build-webhook` as the two callback endpoints, a per-reseller `TenantConfig`-equivalent row) before building our own version of the same pattern on `distr`/Storeapp instead of inventing one from scratch. Its per-reseller storefront is path-based inside one deployment, not a separate build — confirmed no equivalent of email-on-completion actually exists in that repo despite the UI claiming it does; ours must actually send it (Track f.v). The sixth repo is `B-Pay-backend` (`github.com/Zapier-codes/B-Pay-backend`) — **operator correction this session:** this is not new integration work, it's Zapier-codes' own existing, already-running billing infrastructure (a white-labeled payment gateway shell that wraps Korapay/Paystack/JuicyWay/Payscribe — Remita and Flutterwave being consolidated in — fully hiding the underlying providers). Track f's `f.xiii` was drafted this session without cross-checking this repo and wrongly had `distr` integrating Paystack/Flutterwave directly; corrected below and in Track f.
 
+
+### Focus run 3 — Track f, the 14 open leaves *(operator directive, 2026-10-01; active until "14 done ✅ of 14")*
+
+**Standing rule for every session:** unless the operator uploaded a debug (see below), the session's one leaf is **the next open leaf in this checklist**, taken in the order listed. Track f's remaining work is `f.i` to `f.xiv` below: **14 open leaves** (`f.ix` is `[-]` superseded and is not counted; an earlier count of "15" included it). The one-leaf rule of Section 3 still applies.
+
+**Debug upload takes priority.** If the operator attaches a failing run's log, a run summary, a crash trace or any other debug output, that session fixes it **first**, as an operator-directed fix with no leaf (its own commit, `HANDOVER.md` note and `CHANGELOG`-style line where the repo has one), in the repo the log belongs to. It does not change the count. The focus leaf is **not** started in the same session unless the operator's message says to continue with it; it resumes next session. The operator has already done the debugging when they upload one: do not re-diagnose from scratch, read the log, find the cause, fix it, and say what is still an assumption. If both a fix and a leaf land in one session, hand off **one** combined patch (Section 3, step 4).
+
+**Where each leaf is built.** Most of Track f is not Storeapp code. A leaf tagged `distr`, `Zealot` or `D-Store` is built in that repo, by a session that clones it, reads its own handover, and follows its own handoff process (its branch, its base, its patch). Clone `github.com/Zapier-codes/distr` and `github.com/Zapier-codes/B-Pay-backend` where the leaf names them. Do not edit another repo's files from a Storeapp commit, or the reverse. This file is where the leaf is ticked and counted: after the other repo's patch is applied, the next Storeapp session ticks it here. If a leaf names a prerequisite that is still open, build the prerequisite first and record why.
+
+**Reporting:** end the final message with `N done ✅ of 14`, N being the number of `[x]` below after that session's work.
+
+| # | Leaf | Built in | State |
+|---|---|---|---|
+| 1 | `f.i` no-signup request flow | `distr` | [ ] |
+| 2 | `f.ii` storefront-style request surface | `distr` | [ ] |
+| 3 | `f.iii` build dispatch (`workflow_dispatch`) | `distr` | [ ] |
+| 4 | `f.iv.zi` build-config fetch endpoint | `distr` | [ ] |
+| 5 | `f.iv.zo` build-status webhook | `distr` | [ ] |
+| 6 | `f.v` completed-build email through Novu | `distr` | [ ] |
+| 7 | `f.vi` `build-tenant-apk.yml` workflow, second Gradle flavor | **Storeapp** | [ ] |
+| 8 | `f.vii` website-type requests: `TenantConfig` + domain mapping | `D-Store` | [ ] |
+| 9 | `f.viii` manual-upload-only publishing to the catalog | `Zealot` | [ ] |
+| 10 | `f.x` containerize and deploy `distr` (own Postgres and storage) | `distr` | [ ] |
+| 11 | `f.xi` `distr`'s own Novu instance | `distr` | [ ] |
+| 12 | `f.xii` device-fingerprint free-tier gating | `distr` | [ ] |
+| 13 | `f.xiii` per-product billing through `B-Pay-backend` | `distr` | [ ] |
+| 14 | `f.xiv` per-developer scoped API key for Zealot's own API | `Zealot` | [ ] |
+
+*(Keep the table in step with the `[ ]`/`[x]` markers in Track f below; the markers are the source of truth. Order is Track f's own path order; it is not a claim that nothing earlier depends on something later, see "Where each leaf is built".)*
+
 ---
 
 ## 1. Task Hierarchy
