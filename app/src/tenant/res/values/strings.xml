@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder so `tenant` configures on a plain checkout. The tenant build workflow
+     (leaf f.vi, .github/scripts/prepare_tenant_build.py) overwrites it with the tenant's label. -->
+<resources>
+    <string name="app_name">Tenant</string>
+</resources>

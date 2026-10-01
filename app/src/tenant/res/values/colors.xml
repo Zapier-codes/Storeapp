@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder, overwritten by the tenant build workflow with branding.primary_color_hex. -->
+<resources>
+    <color name="tenant_icon_background">#FF444444</color>
+</resources>

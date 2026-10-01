@@ -3,6 +3,26 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// f.vi: inputs of the `tenant` flavor below. `.github/workflows/build-tenant-apk.yml` writes
+// `app/tenant.properties` (gitignored) from distr's build-config answer before it builds; nobody
+// edits it by hand. Absent file = a plain checkout, where the `tenant` flavor only has to configure
+// (so IDE sync and `./gradlew assemble` keep working) and an explicit tenant task is refused below.
+val tenantProps = java.util.Properties().apply {
+    val f = file("tenant.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val tenantId: String? = tenantProps.getProperty("tenant_id")
+if (tenantId == null && gradle.startParameter.taskNames.any { it.contains("Tenant") }) {
+    throw GradleException(
+        "A tenant build was asked for but app/tenant.properties does not exist. " +
+            "It is written by .github/scripts/prepare_tenant_build.py; see HANDOVER.md f.vi."
+    )
+}
+if (tenantId != null && !Regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\$").matches(tenantId)) {
+    throw GradleException("tenant_id in app/tenant.properties is not a DNS-label-safe id")
+}
+val tenantVersionCode: Int = tenantProps.getProperty("version_code")?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+
 android {
     namespace = "com.vythera.vyxelapps"
     compileSdk {
@@ -49,6 +69,19 @@ android {
         // pattern gets added alongside, not built speculatively ahead of an actual second tenant.
         create("default") {
             dimension = "tenant"
+        }
+
+        // f.vi: the second flavor, the one `1.c.i.zo` had no tenant to build for. ONE flavor for ALL
+        // distr-provisioned tenants, not one block per tenant: the workflow supplies the tenant's
+        // identity at build time (`app/tenant.properties`, plus `src/tenant/res/` for the launcher
+        // label and icon), so a new tenant never needs a commit here. It still selects packaging
+        // metadata only (applicationId, launcher label, launcher icon, version), never behavior.
+        // `t_` keeps every applicationId segment starting with a letter whatever the tenant_id
+        // starts with; hyphens become underscores because a package segment cannot hold one.
+        create("tenant") {
+            dimension = "tenant"
+            applicationId = "com.vythera.tenant.t_" + (tenantId ?: "unconfigured").replace('-', '_')
+            versionCode = tenantVersionCode
         }
     }
 

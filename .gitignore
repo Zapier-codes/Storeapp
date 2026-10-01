@@ -14,3 +14,5 @@
 .cxx
 local.properties
 patches/
+# f.vi: written by .github/scripts/prepare_tenant_build.py for one tenant build, never committed
+/app/tenant.properties
