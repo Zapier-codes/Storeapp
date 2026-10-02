@@ -1,0 +1,79 @@
+# Leaf 7.a.i.zi -- builds Storeapp's OWN (first-party) release AAB in CI.
+#
+# Separate on purpose from `build-tenant-apk.yml`: that one builds one distr-provisioned white-label
+# APK for a tenant; this one builds the `default` flavor, the store's own app, as an Android App
+# Bundle. Nothing here reads distr, a tenant config or a tenant secret.
+#
+# The AAB is NOT signed here. Zealot compiles the bundle to APKs and signs them with its own org key
+# (Anthropic::BundletoolService), so no keystore secret is needed for this workflow. The bundle is
+# kept as a workflow artifact; leaf 7.a.i.zo reads its manifest into listing.json and leaf 7.a.ii.zo
+# uploads it to Zealot.
+#
+# Fires on a version tag (v*) or by hand from the Actions tab.
+name: Release AAB
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+# One build per ref at a time; a repeated run for the same ref waits instead of racing.
+concurrency:
+  group: release-aab-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # `default` is the flavor that keeps today's applicationId. The task name has no "Tenant" in it,
+      # so app/build.gradle.kts does not ask for app/tenant.properties.
+      - name: Build the release bundle
+        run: ./gradlew --no-daemon --console=plain :app:bundleDefaultRelease
+
+      - name: Check the bundle
+        id: aab
+        run: |
+          set -euo pipefail
+          dir=app/build/outputs/bundle/defaultRelease
+          ls -l "$dir"
+          shopt -s nullglob
+          files=("$dir"/*.aab)
+          [ "${#files[@]}" -eq 1 ] || { echo "::error::expected exactly one .aab in $dir, found ${#files[@]}"; exit 1; }
+          aab="${files[0]}"
+          # An AAB is a zip whose base module holds the manifest the listing leaf will read.
+          unzip -l "$aab" | grep -q ' base/manifest/AndroidManifest.xml$' \
+            || { echo "::error::$aab has no base/manifest/AndroidManifest.xml"; exit 1; }
+          sha=$(sha256sum "$aab" | cut -d' ' -f1)
+          echo "path=$aab" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release AAB"
+            echo ""
+            echo "- File: \`$(basename "$aab")\` ($(stat -c %s "$aab") bytes)"
+            echo "- SHA-256: \`$sha\`"
+            echo "- Ref: \`$GITHUB_REF_NAME\` at \`$GITHUB_SHA\`"
+            echo "- Unsigned: Zealot signs the APKs it compiles from this bundle."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storeapp-release-aab
+          path: ${{ steps.aab.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
