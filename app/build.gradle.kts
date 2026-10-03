@@ -23,6 +23,30 @@ if (tenantId != null && !Regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\$").matches(
 }
 val tenantVersionCode: Int = tenantProps.getProperty("version_code")?.toIntOrNull()?.takeIf { it > 0 } ?: 1
 
+// 7.a.viii.zi: the first-party release version is read from two Gradle properties that
+// `.github/workflows/release-aab.yml` sets (-PreleaseVersionName from the tag, -PreleaseVersionCode from the
+// run number plus an offset), so a second release can never carry the first one's version. A plain checkout
+// sets neither and keeps the local defaults below. A property that is set but malformed stops the build with
+// a message: silently falling back to the default is exactly the bug this closes. The `tenant` flavor is not
+// touched; it keeps `tenantVersionCode` (f.vi).
+val defaultVersionCode = 3
+val defaultVersionName = "1.0.2"
+val releaseVersionCode: Int = project.findProperty("releaseVersionCode")?.toString()?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?.let { raw ->
+        raw.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }
+            ?: throw GradleException("-PreleaseVersionCode must be a whole number from 1 to 2100000000, got '$raw'")
+    }
+    ?: defaultVersionCode
+val releaseVersionName: String = project.findProperty("releaseVersionName")?.toString()?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?.also { raw ->
+        if (!Regex("^[0-9]+(\\.[0-9]+){1,3}(-[0-9A-Za-z.]+)?\$").matches(raw)) {
+            throw GradleException("-PreleaseVersionName must look like 1.2.3 or 1.2.3-rc.1, got '$raw'")
+        }
+    }
+    ?: defaultVersionName
+
 android {
     namespace = "com.vythera.vyxelapps"
     compileSdk {
@@ -35,8 +59,8 @@ android {
         applicationId = "com.vythera.vyxelapps"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = releaseVersionCode
+        versionName = releaseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

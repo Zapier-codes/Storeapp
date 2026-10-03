@@ -10,7 +10,8 @@
 # committed `listing/` folder, built by .github/scripts/build_listing.py); leaf 7.a.ii.zo uploads both
 # to Zealot.
 #
-# Fires on a version tag (v*) or by hand from the Actions tab.
+# Fires on a version tag (v*) or by hand from the Actions tab. The version is set by the "Work out the
+# version" step (leaf 7.a.viii.zi): versionName from the tag, versionCode from the run number plus an offset.
 name: Release AAB
 
 on:
@@ -43,10 +44,64 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Leaf 7.a.viii.zi: the release version rises with every release. Before this step, versionCode 3 and
+      # versionName 1.0.2 were hardcoded in app/build.gradle.kts, so a second run carried the first one's
+      # version. Now:
+      #   versionCode = this workflow's run number + an offset. The run number only grows, and a re-run of
+      #                 the SAME run keeps its code (so Zealot can recognise it as the same release, leaf 29).
+      #                 The offset is 100 unless the repository variable VERSION_CODE_OFFSET says otherwise;
+      #                 the highest versionCode this repo's history ever held is 3, so 100 clears it. Raise
+      #                 the variable if Zealot already holds a Storeapp release above that.
+      #   versionName = the tag without its leading "v" (v1.2.3 gives 1.2.3). A manual run on a branch has
+      #                 no tag, so versionName keeps app/build.gradle.kts's default and only the code moves.
+      # Values go in through env, never spliced into the script, and are checked before Gradle sees them.
+      - name: Work out the version
+        id: version
+        run: |
+          set -euo pipefail
+          offset="${OFFSET:-100}"
+          [[ "$offset" =~ ^(0|[1-9][0-9]{0,8})$ ]] \
+            || { echo "::error::VERSION_CODE_OFFSET must be a whole number without leading zeros, got '$offset'"; exit 1; }
+          code=$((RUN_NUMBER + offset))
+          [ "$code" -le 2100000000 ] \
+            || { echo "::error::versionCode $code is above Android's limit of 2100000000"; exit 1; }
+          name=""
+          if [ "$REF_TYPE" = "tag" ]; then
+            name="${REF_NAME#v}"
+            [[ "$name" =~ ^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z.]+)?$ ]] \
+              || { echo "::error::tag '$REF_NAME' is not v<major>.<minor>[.<patch>][-suffix], so it cannot be a versionName"; exit 1; }
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Version"
+            echo ""
+            echo "- versionCode: \`$code\` (run number $RUN_NUMBER + offset $offset)"
+            if [ -n "$name" ]; then
+              echo "- versionName: \`$name\` (from the tag)"
+            else
+              echo "- versionName: the default in app/build.gradle.kts (no tag on this run)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          OFFSET: ${{ vars.VERSION_CODE_OFFSET }}
+          RUN_NUMBER: ${{ github.run_number }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+
       # `default` is the flavor that keeps today's applicationId. The task name has no "Tenant" in it,
       # so app/build.gradle.kts does not ask for app/tenant.properties.
       - name: Build the release bundle
-        run: ./gradlew --no-daemon --console=plain :app:bundleDefaultRelease
+        run: |
+          set -euo pipefail
+          args=("-PreleaseVersionCode=$VERSION_CODE")
+          if [ -n "$VERSION_NAME" ]; then
+            args+=("-PreleaseVersionName=$VERSION_NAME")
+          fi
+          ./gradlew --no-daemon --console=plain "${args[@]}" :app:bundleDefaultRelease
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
 
       - name: Check the bundle
         id: aab
@@ -101,6 +156,15 @@ jobs:
           out="$RUNNER_TEMP/release-out"
           mkdir -p "$out"
           python .github/scripts/build_listing.py "$AAB" "$JAR" listing "$out/listing.json"
+          # Leaf 7.a.viii.zi: the bundle's own manifest must carry the version this run asked for. If the
+          # Gradle properties were ever dropped, the build would still succeed with the default version and
+          # a second release would look like the first; this turns that into a failed run.
+          jq -e --argjson code "$VERSION_CODE" '.manifest.version_code == $code' "$out/listing.json" > /dev/null \
+            || { echo "::error::the bundle's versionCode is $(jq -r '.manifest.version_code' "$out/listing.json"), this run asked for $VERSION_CODE"; exit 1; }
+          if [ -n "$VERSION_NAME" ]; then
+            jq -e --arg name "$VERSION_NAME" '.manifest.version_name == $name' "$out/listing.json" > /dev/null \
+              || { echo "::error::the bundle's versionName is $(jq -r '.manifest.version_name' "$out/listing.json"), this run asked for $VERSION_NAME"; exit 1; }
+          fi
           cp "$AAB" "$out/"
           echo "dir=$out" >> "$GITHUB_OUTPUT"
           {
@@ -114,6 +178,8 @@ jobs:
         env:
           AAB: ${{ steps.aab.outputs.path }}
           JAR: ${{ steps.bundletool.outputs.jar }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
 
       - uses: actions/upload-artifact@v4
         with:
