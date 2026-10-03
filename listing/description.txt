@@ -1,0 +1,17 @@
+Vyxel Apps is an open-source Android app store that scans six sources and merges them into one feed: GitHub, GitLab, F-Droid, IzzyOnDroid, APKPure and Aptoide. No ads and no bloat.
+
+Find what you want faster
+- Browse curated categories plus smart sections such as Trending and Newly Launched.
+- See screenshots pulled straight from each project's README.
+- Sync your GitHub starred repositories into your favourites.
+
+Install with confidence
+- Every downloaded APK is checked against the signing certificate of the app already on your phone before it installs, so a hijacked repository or redirected release cannot silently replace what you have.
+- Your install history is kept, and you can roll back to a previous version from it.
+
+Made for everyone
+- Available in 16 languages, including English, Hindi, Spanish, French, German, Japanese, Portuguese, Arabic and Chinese.
+- Dismissible in-app announcements for releases and community updates.
+- Optional Liquid Glass Pro themes.
+
+Vyxel Apps is open source under the AGPL-3.0 licence.

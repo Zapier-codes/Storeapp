@@ -6,8 +6,9 @@
 #
 # The AAB is NOT signed here. Zealot compiles the bundle to APKs and signs them with its own org key
 # (Anthropic::BundletoolService), so no keystore secret is needed for this workflow. The bundle is
-# kept as a workflow artifact; leaf 7.a.i.zo reads its manifest into listing.json and leaf 7.a.ii.zo
-# uploads it to Zealot.
+# kept as a workflow artifact beside `listing.json` (leaf 7.a.i.zo: the bundle's own manifest plus the
+# committed `listing/` folder, built by .github/scripts/build_listing.py); leaf 7.a.ii.zo uploads both
+# to Zealot.
 #
 # Fires on a version tag (v*) or by hand from the Actions tab.
 name: Release AAB
@@ -71,9 +72,52 @@ jobs:
             echo "- Unsigned: Zealot signs the APKs it compiles from this bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # bundletool reads the manifest out of the AAB (its protobuf form is not plain XML). Pinned to a
+      # version AND a checksum, so a replaced release asset fails the run instead of running.
+      - name: Fetch bundletool
+        id: bundletool
+        run: |
+          set -euo pipefail
+          ver=1.18.3
+          want=a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29
+          jar="$RUNNER_TEMP/bundletool-all-$ver.jar"
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 180 -o "$jar" \
+            "https://github.com/google/bundletool/releases/download/$ver/bundletool-all-$ver.jar"
+          echo "$want  $jar" | sha256sum -c -
+          echo "jar=$jar" >> "$GITHUB_OUTPUT"
+
+      # The bundle's own manifest (applicationId, version, label, SDK levels, permissions) plus the
+      # committed listing/ folder (text, category, changelog, screenshots, feature graphic) in one file.
+      # Fails, rather than guessing, when the manifest cannot be read or a listing file breaks a rule.
+      - name: Build listing.json
+        id: listing
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow
+          out="$RUNNER_TEMP/release-out"
+          mkdir -p "$out"
+          python .github/scripts/build_listing.py "$AAB" "$JAR" listing "$out/listing.json"
+          cp "$AAB" "$out/"
+          echo "dir=$out" >> "$GITHUB_OUTPUT"
+          {
+            echo ""
+            echo "### listing.json"
+            echo ""
+            echo '```json'
+            jq '{name, manifest, bundle}' "$out/listing.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          AAB: ${{ steps.aab.outputs.path }}
+          JAR: ${{ steps.bundletool.outputs.jar }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: storeapp-release-aab
-          path: ${{ steps.aab.outputs.path }}
+          path: ${{ steps.listing.outputs.dir }}
           if-no-files-found: error
           retention-days: 30
