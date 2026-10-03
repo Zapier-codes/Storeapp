@@ -98,6 +98,9 @@ jobs:
           if [ -n "$VERSION_NAME" ]; then
             args+=("-PreleaseVersionName=$VERSION_NAME")
           fi
+          # gradlew was committed without its execute bit (100644), which made the first run exit 126.
+          # The mode is fixed in git too; this line keeps a checkout that loses the bit from failing the same way.
+          chmod +x ./gradlew
           ./gradlew --no-daemon --console=plain "${args[@]}" :app:bundleDefaultRelease
         env:
           VERSION_CODE: ${{ steps.version.outputs.code }}
