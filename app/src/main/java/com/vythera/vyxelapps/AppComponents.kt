@@ -103,10 +103,9 @@ fun TopBar(modifier: Modifier = Modifier) {
                         .clip(MaterialTheme.shapes.small)
                 )
                 Text(
-                    // d.i.zi: was hardcoded "Vyxel Apps" -- tenant display name now,
-                    // TenantConfig.current defaults to the seed record whose
-                    // displayName IS "Vyxel Apps" (TenantConfig.kt), so a device with
-                    // no tenant config fetched yet renders byte-identical to before.
+                    // Tenant display name. TenantConfig.current defaults to the seed record
+                    // whose displayName is "Appstore" (TenantConfig.kt), so a device with
+                    // no tenant config fetched yet shows "Appstore".
                     com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName,
                     style      = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
@@ -1890,7 +1889,7 @@ fun InstalledScreen(
                     Text(s.navInstalled, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         when {
-                            entries.isEmpty()   -> "No apps installed through Vyxel yet"
+                            entries.isEmpty()   -> "No apps installed through ${com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName} yet"
                             updateCount > 0     -> "$updateCount update${if (updateCount != 1) "s" else ""} available"
                             else                -> "${entries.size} app${if (entries.size != 1) "s" else ""} installed"
                         },
@@ -3077,12 +3076,12 @@ fun AppDetailScreen(
                 }
             }
 
-            // Vyxel Trust Score
+            // Trust Score (named after the tenant's store)
             installState.trustScore?.let { trust ->
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                         Text(
-                            "Vyxel Trust Score",
+                            "${com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName} Trust Score",
                             style      = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color      = MaterialTheme.colorScheme.onSurface,
@@ -3366,7 +3365,7 @@ fun TrustScoreBar(trust: TrustScore) {
             ) {
                 Column {
                     Text(
-                        "Vyxel Trust Score",
+                        "${com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName} Trust Score",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

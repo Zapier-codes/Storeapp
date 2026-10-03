@@ -76,7 +76,7 @@ object DStoreCatalogClient {
         .followSslRedirects(false)
         .addInterceptor { chain ->
             chain.proceed(chain.request().newBuilder()
-                .addHeader("User-Agent", "VyxelApps/1.0").build())
+                .addHeader("User-Agent", HTTP_USER_AGENT).build())
         }.build()
 
     /**

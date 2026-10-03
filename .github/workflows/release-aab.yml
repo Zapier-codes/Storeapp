@@ -519,8 +519,9 @@ jobs:
             || fail "no app id came out of the upload step (see its warning), so the listing text was not applied; the bundle is uploaded and held. By hand: PATCH /api/apps/<app id>/listing_edit, then POST /api/apps/<app id>/listing_edit/commit (docs/RELEASING.md)"
           [ -f release-out/listing.json ] || fail "release-out/listing.json is missing from the artifact"
 
-          # What to send. The listing's own name is the bundle's launcher label ("Vyxel Apps" today), which is
-          # not what this app is called in Zealot, so the name is sent only when SYNC_APP_NAME is "true".
+          # What to send. The listing's own name is the bundle's launcher label ("Appstore", the
+          # `app_name` resource), which is also what this app is called in Zealot. The name is still sent
+          # only when SYNC_APP_NAME is "true", so a rename made by hand in Zealot is never overwritten.
           want="$RUNNER_TEMP/want.json"
           if [ "${SYNC_APP_NAME:-}" = "true" ]; then
             jq '{name: .name, short_description: .listing.short_description, description: .listing.description}' \

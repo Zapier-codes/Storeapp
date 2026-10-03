@@ -508,7 +508,7 @@ object CodebergClient {
             .addInterceptor { chain ->
                 chain.proceed(chain.request().newBuilder()
                     .addHeader("Accept", "application/json")
-                    .addHeader("User-Agent", "VyxelApps/1.0")
+                    .addHeader("User-Agent", com.vythera.vyxelapps.api.HTTP_USER_AGENT)
                     .build())
             }.build())
         .addConverterFactory(GsonConverterFactory.create())
@@ -588,7 +588,7 @@ object IzzyOnDroidClient {
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .addInterceptor { chain ->
             chain.proceed(chain.request().newBuilder()
-                .addHeader("User-Agent", "VyxelApps/1.0").build())
+                .addHeader("User-Agent", com.vythera.vyxelapps.api.HTTP_USER_AGENT).build())
         }.build()
 
     @Volatile private var cache   : List<GitHubRepo>? = null
@@ -675,7 +675,7 @@ object ZealotClient {
         .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .addInterceptor { chain ->
             chain.proceed(chain.request().newBuilder()
-                .addHeader("User-Agent", "VyxelApps/1.0").build())
+                .addHeader("User-Agent", com.vythera.vyxelapps.api.HTTP_USER_AGENT).build())
         }.build()
 
     /** Raw, not-yet-verified bytes of one fetch attempt. Signature verification (`1.a.ii.zi`) consumes this; nothing here checks it. */

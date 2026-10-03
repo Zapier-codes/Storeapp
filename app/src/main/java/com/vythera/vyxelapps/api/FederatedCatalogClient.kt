@@ -44,7 +44,7 @@ object FederatedCatalogClient {
         .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .addInterceptor { chain ->
             chain.proceed(chain.request().newBuilder()
-                .addHeader("User-Agent", "VyxelApps/1.0").build())
+                .addHeader("User-Agent", HTTP_USER_AGENT).build())
         }.build()
 
     /** Same shape as `ZealotClient.RawIndexFetch` — kept as its own type rather than reusing that

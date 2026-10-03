@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Vyxel Apps"
+rootProject.name = "Appstore"
 include(":app")
  

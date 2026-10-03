@@ -1,4 +1,4 @@
-Vyxel Apps is an open-source Android app store that scans six sources and merges them into one feed: GitHub, GitLab, F-Droid, IzzyOnDroid, APKPure and Aptoide. No ads and no bloat.
+Appstore is an open-source Android app store that scans six sources and merges them into one feed: GitHub, GitLab, F-Droid, IzzyOnDroid, APKPure and Aptoide. No ads and no bloat.
 
 Find what you want faster
 - Browse curated categories plus smart sections such as Trending and Newly Launched.
@@ -14,4 +14,4 @@ Made for everyone
 - Dismissible in-app announcements for releases and community updates.
 - Optional Liquid Glass Pro themes.
 
-Vyxel Apps is open source under the AGPL-3.0 licence.
+Appstore is open source under the AGPL-3.0 licence.

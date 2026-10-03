@@ -22,7 +22,7 @@ import com.vythera.vyxelapps.api.TenantConfig
  * Shares notification slot ([UPDATE_NOTIFICATION_TAG], 2024) with `UpdateCheckWorker`, so a push
  * and the worker's local check for the same updates replace each other rather than stacking.
  */
-class VyxelMessagingService : FirebaseMessagingService() {
+class AppstoreMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         PushRegistrar.onNewToken(applicationContext, token)

@@ -54,8 +54,22 @@ import java.util.concurrent.TimeUnit
  * are the leaves that will), same "model the whole schema this converter's siblings
  * already commit to" posture `ZealotEntry.kt` uses for `ZealotVersion`'s unused fields.
  */
+/**
+ * Display name of the seed (first-party) tenant, used only until a tenant record is fetched.
+ * Every on-screen mention of the store's name reads `TenantConfig.current.branding.displayName`,
+ * never this constant, so a white-label tenant's own name replaces it everywhere.
+ */
+const val DEFAULT_DISPLAY_NAME = "Appstore"
+
+/**
+ * `User-Agent` token sent on catalog and metadata requests. A fixed ASCII token on purpose: it is
+ * an HTTP header (a tenant name with spaces or non-ASCII characters can make OkHttp reject it),
+ * and servers key on it, so it names the platform, not the tenant.
+ */
+const val HTTP_USER_AGENT = "Appstore/1.0"
+
 data class TenantBranding(
-    @SerializedName("display_name")      val displayName: String = "Vyxel Apps",
+    @SerializedName("display_name")      val displayName: String = DEFAULT_DISPLAY_NAME,
     @SerializedName("primary_color_hex") val primaryColorHex: String = "#D0BCFF",
     @SerializedName("logo_url")          val logoUrl: String = "",
     @SerializedName("logo_sha256")       val logoSha256: String = ""

@@ -579,17 +579,15 @@ fun ProfileScreen(
                             }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(horizontal = 14.dp))
 
-                            // Share Vyxel
+                            // Share the store
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        // d.i.zi: three literal "Vyxel Apps" mentions below
-                                        // (subject/body/chooser-title) now read the tenant
-                                        // display name -- TenantConfig.current defaults to
-                                        // the seed record whose displayName IS "Vyxel Apps",
-                                        // so a device with no tenant config fetched yet
-                                        // shares this exact text unchanged.
+                                        // The three mentions below (subject/body/chooser-title) read the tenant
+                                        // display name. TenantConfig.current defaults to the seed record,
+                                        // whose displayName is "Appstore", so a device with no tenant
+                                        // config fetched yet shares "Appstore".
                                         val brandName = com.vythera.vyxelapps.api.TenantConfig.current.branding.displayName
                                         val share = Intent(Intent.ACTION_SEND).apply {
                                             type = "text/plain"
@@ -605,8 +603,8 @@ fun ProfileScreen(
                             ) {
                                 Icon(Icons.Rounded.Share, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(s.shareVyxel, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                                    Text(s.shareVyxelDesc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(s.shareApp, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(s.shareAppDesc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }

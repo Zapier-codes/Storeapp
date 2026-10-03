@@ -15,7 +15,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import java.util.concurrent.TimeUnit
 
-class VyxelApp : Application(), ImageLoaderFactory {
+class AppstoreApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()

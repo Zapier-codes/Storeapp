@@ -86,7 +86,7 @@ object PushRegistrar {
         }
     }
 
-    /** Also the entry point for `VyxelMessagingService.onNewToken` (token rotation). */
+    /** Also the entry point for `AppstoreMessagingService.onNewToken` (token rotation). */
     fun onNewToken(ctx: Context, token: String) {
         if (token.isBlank()) return
         val app = ctx.applicationContext

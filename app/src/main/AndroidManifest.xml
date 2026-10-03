@@ -14,19 +14,19 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <application
-        android:name=".VyxelApp"
+        android:name=".AppstoreApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.VyxelApps"
+        android:theme="@style/Theme.Appstore"
         android:requestLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.VyxelApps">
+            android:theme="@style/Theme.Appstore">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -46,7 +46,7 @@
 
         <!-- e.i: FCM token refresh + message delivery. Inert unless FCM_* build config is set. -->
         <service
-            android:name=".VyxelMessagingService"
+            android:name=".AppstoreMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

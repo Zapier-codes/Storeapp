@@ -78,7 +78,7 @@
     "is_default_tenant": {
       "type": "boolean",
       "default": false,
-      "description": "True for exactly one record: the seed tenant whose values reproduce today's pre-multi-tenant hardcoded behavior (cdn_base = the existing nikhilkain URL, branding = \"Vyxel Apps\"). Exists so a consumer can assert at least one such record is always present, never so every tenant with this shape is trusted equally — trust comes from the signature check (1.c.ii.zo), not this flag."
+      "description": "True for exactly one record: the seed tenant whose values reproduce today's pre-multi-tenant hardcoded behavior (cdn_base = the existing nikhilkain URL, branding = \"Appstore\"). Exists so a consumer can assert at least one such record is always present, never so every tenant with this shape is trusted equally — trust comes from the signature check (1.c.ii.zo), not this flag."
     }
   }
 }

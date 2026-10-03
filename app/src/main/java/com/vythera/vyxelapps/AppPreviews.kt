@@ -53,7 +53,7 @@ private fun ThemePreviewWrapper(theme: AppThemeColors, content: @Composable () -
     )
     CompositionLocalProvider(
         LocalTheme provides theme,
-        LocalStrings provides AppStrings()
+        LocalStrings provides AppStrings().withBrand(com.vythera.vyxelapps.api.DEFAULT_DISPLAY_NAME)
     ) {
         MaterialTheme(colorScheme = colorScheme) {
             Box(

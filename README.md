@@ -1,9 +1,11 @@
 <a id="top"></a>
 <div align="center">
 
-<img src="docs/logo.png" width="410" alt="Vyxel Apps logo"/>
+<img src="docs/logo.png" width="410" alt="Appstore logo"/>
 
-# VYXEL APPS
+# APPSTORE
+
+<sub>Built on the open-source Vyxel Apps client by NikhilKain (AGPL-3.0). The store name shown in the app is set per tenant, not hardcoded.</sub>
 
 <img src="https://readme-typing-svg.demolab.com/?font=Orbitron&weight=700&size=20&duration=3000&pause=1200&color=00F0FF&center=true&vCenter=true&width=680&lines=Multi-source+Android+app+store;GitHub%2C+GitLab%2C+F-Droid%2C+IzzyOnDroid%2C+APKPure+%26+Aptoide;Open+source+%C2%B7+Zero+ads+%C2%B7+Zero+bloat" alt="typing tagline" width="680" height="40"/>
 
@@ -31,7 +33,7 @@
 ---
 
 > ⚠️ **Official Source Notice**
-> The ONLY official source for Vyxel Apps is this repository.
+> The ONLY official source for Appstore is this repository.
 > APKs from any other website, Telegram channel, or source are
 > unofficial and may be tampered with. Always verify the signature.
 
@@ -96,7 +98,7 @@ Dismissible banners for giveaways, releases, and community updates.
 
 Four premium themes — **Liquid Glass Dark**, **Liquid Glass Light**, **Neon Punk**, and **Cyberpunk** *(the one you're looking at right now)* — built on real-time backdrop blur, all unlocked with a single license key. A free 30-second preview is available before you buy.
 
-Vyxel Apps is fully free and open-source without it — this is purely an optional visual pack that helps fund development.
+Appstore is fully free and open-source without it — this is purely an optional visual pack that helps fund development.
 
 <div align="center">
 
@@ -131,7 +133,7 @@ Vyxel Apps is fully free and open-source without it — this is purely an option
 2. On your Android device: **Settings → Apps → Special access → Install unknown apps** → enable for your browser/file manager
 3. Tap the downloaded APK to install
 
-> 💡 Optional: install [Shizuku](https://shizuku.rikka.app/) for silent, confirmation-free installs of every app you update through Vyxel Apps.
+> 💡 Optional: install [Shizuku](https://shizuku.rikka.app/) for silent, confirmation-free installs of every app you update through Appstore.
 
 <details>
 <summary><b>🔧 Building from Source</b></summary>
@@ -185,7 +187,7 @@ Contributions are welcome! Open an issue first to discuss what you'd like to cha
 <a id="support"></a>
 ## 💖 Support
 
-If Vyxel Apps is useful to you:
+If Appstore is useful to you:
 - ⭐ Star this repo
 - 💎 Grab [Liquid Glass Pro](https://narzo7.gumroad.com/l/suayy) — it's the main thing that funds ongoing development
 - 🐦 Share with your friends

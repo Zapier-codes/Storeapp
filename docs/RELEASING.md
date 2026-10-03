@@ -69,8 +69,8 @@ the text in a draft and only publishes it on `commit`, so the job stages and com
 knowing:
 
 - **The app's name is not sent** unless `SYNC_APP_NAME` is `true`. The listing's name is the launcher label in
-  the bundle (`Vyxel Apps`), which is not what the app is called in Zealot (`Appstore`); sending it would rename
-  the app on every release.
+  the bundle (`Appstore`, the `app_name` resource), which matches the name in Zealot today; it stays opt-in so a
+  rename made by hand in Zealot is not overwritten by the next release.
 - Only a field that differs from what Zealot shows is staged, so a re-run stages nothing and says so.
 - If someone has an **unpublished draft in the console** that edits other fields, the job stops without changing
   anything, because the commit would publish their edits too. Publish or discard that draft, then re-run only the
