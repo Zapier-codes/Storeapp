@@ -2424,7 +2424,24 @@ fun AppDetailScreen(
                             installState.apkAsset != null &&
                             installState.downloadProgress == null
 
-                    if (installState.downloadProgress != null) {
+                    if (repo.source == AppSource.DSTORE) {
+                        // 7.b.iv.zi: disabled, with the reason stated. Not installable until decision 5a/5b.
+                        Button(
+                            onClick  = {},
+                            enabled  = false,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape    = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Rounded.InstallMobile, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(s.install, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            "Third-party listing. This app comes from D-Store's catalog, which this app cannot verify, so it cannot be installed from here yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else if (installState.downloadProgress != null) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier              = Modifier.fillMaxWidth(),

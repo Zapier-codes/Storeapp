@@ -48,6 +48,8 @@ android {
         buildConfigField("String", "FCM_API_KEY", "\"${prop("fcmApiKey")}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${prop("fcmSenderId")}\"")
         buildConfigField("String", "PUSH_REGISTRATION_URL", "\"${prop("pushRegistrationUrl")}\"")
+        // 7.b.iv.zi: D-Store catalog API base URL (e.g. https://<deployment>), blank = D-Store browse is empty. Gradle property dstoreCatalogUrl, never committed.
+        buildConfigField("String", "DSTORE_CATALOG_URL", "\"${prop("dstoreCatalogUrl")}\"")
     }
 
     // Packaging-identity-only product flavors -- leaf `1.c.i.zo`. One flavor per distributable

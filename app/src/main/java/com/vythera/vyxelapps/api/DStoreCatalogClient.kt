@@ -1,6 +1,7 @@
 package com.vythera.vyxelapps.api
 
 import com.google.gson.JsonElement
+import com.vythera.vyxelapps.BuildConfig
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
@@ -57,7 +58,7 @@ enum class DStoreType(val wire: String) { APP("app"), GAME("game") }
 
 object DStoreCatalogClient {
     /** Blank means "not configured yet", not an error: [page] answers `null` without a request. Same posture as `ZealotClient.baseUrl`. */
-    @Volatile var baseUrl: String = ""
+    @Volatile var baseUrl: String = BuildConfig.DSTORE_CATALOG_URL
 
     const val PAGE_MAX = 100
     const val DEFAULT_LIMIT = 50

@@ -3,6 +3,7 @@ package com.vythera.vyxelapps
 import android.app.Application
 import com.vythera.vyxelapps.api.AppEntry
 import com.vythera.vyxelapps.api.MetadataManager
+import com.vythera.vyxelapps.api.toUnifiedRepo
 import com.vythera.vyxelapps.R
 import kotlinx.coroutines.isActive
 import android.app.DownloadManager
@@ -1234,9 +1235,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (group.size == 1) return@map group[0]
             // d.iv.zo: among Zealot copies prefer the first-party one, so a federated first-party
             // entry is never shadowed by a same-package own-tenant copy that would lose the pin.
+            // 7.b.iv.zi: a D-Store copy ranks LAST, below the stars rule, not above it. Its row is unsigned
+            // third-party data with no checksum claim and its card cannot be installed (decision 5a/5b), so if
+            // it won over, say, an F-Droid copy the merged card would lose an Install button the user could
+            // have had. It is canonical only when it is the whole group. (Reversal of the leaf's own wording,
+            // "above the stars rule"; recorded in HANDOVER.md for the operator to overrule.)
             val canonical = group.firstOrNull { isFirstParty(it) }
                 ?: group.firstOrNull { it.source == AppSource.ZEALOT }
-                ?: group.maxByOrNull { it.stargazers_count }
+                ?: group.filter { it.source != AppSource.DSTORE }.maxByOrNull { it.stargazers_count }
                 ?: group.first()
             canonical.copy(mergedSources = group - canonical)
         }
@@ -1266,10 +1272,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openSourceBrowse(source: AppSource) {
-        // 7.b.iii.zi: D-Store has no browse path until 7.b.iv.zi. Without this, `cdnKey` below would be null
-        // and the final `else` would run a GitHub topic search titled "D-Store Apps", which is wrong data
-        // under a right-looking name. Nothing calls this with DSTORE today (no screen lists it).
-        if (source == AppSource.DSTORE) return
+        // 7.b.iv.zi: D-Store pages through its own client, never the CDN/GitHub paths below (without this
+        // early return the final `else` would run a GitHub topic search titled "D-Store Apps").
+        if (source == AppSource.DSTORE) { openDStoreBrowse(); return }
         val cdnKey = when (source) {
             AppSource.FDROID   -> "fdroid"
             AppSource.GITLAB   -> "gitlab"
@@ -1405,6 +1410,73 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         } else {
             openSeeAll(source.label, "topic:android stars:>50")
+        }
+    }
+
+    // ── 7.b.iv.zi: D-Store browse ───────────────────────────────────────────────
+    // Pages through DStoreCatalogClient (D-Store's GET /api/catalog, `top` order). Unsigned third-party
+    // data: nothing here may become a checked claim, and a D-Store card is not installable (see
+    // `fetchRelease` and `downloadAndInstall`). `seeAllSource` carries DSTORE_BROWSE_KEY so
+    // `loadMoreSeeAll` routes here and never to `MetadataManager.browseSource`.
+    private val DSTORE_BROWSE_KEY = "dstore"
+    private var dstoreCursor  : String? = null   // next_cursor of the last page; null = no more pages
+    private var dstoreStopped : Boolean = false  // a page failed or the last page was reached: stop auto-loading
+    private var dstoreJob     : kotlinx.coroutines.Job? = null
+
+    private fun openDStoreBrowse() {
+        dstoreJob?.cancel()
+        dstoreCursor  = null
+        dstoreStopped = false
+        state = state.copy(
+            seeAllTitle     = "${AppSource.DSTORE.label} Apps (third-party listings)",
+            seeAllApps      = emptyList(),
+            seeAllQuery     = "",
+            seeAllPage      = 1,
+            seeAllSource    = DSTORE_BROWSE_KEY,
+            isLoadingSeeAll = true
+        )
+        fetchDStorePage(first = true)
+    }
+
+    private fun loadMoreDStore() {
+        if (state.isLoadingSeeAll) return
+        // The list screen calls this whenever it reaches the end and is idle, and its "Retry" button calls it
+        // on an empty list. So: an empty list retries from page 1; a non-empty list stops for good once the
+        // last page is reached or a page fails (no retry loop against a failing server).
+        if (state.seeAllApps.isEmpty()) {
+            dstoreCursor = null; dstoreStopped = false
+            state = state.copy(isLoadingSeeAll = true)
+            fetchDStorePage(first = true)
+            return
+        }
+        if (dstoreStopped || dstoreCursor == null) return
+        state = state.copy(isLoadingSeeAll = true)
+        fetchDStorePage(first = false)
+    }
+
+    private fun fetchDStorePage(first: Boolean) {
+        val cursor = if (first) null else dstoreCursor
+        dstoreJob = viewModelScope.launch {
+            val page = com.vythera.vyxelapps.api.DStoreCatalogClient.page(
+                order  = com.vythera.vyxelapps.api.DStoreOrder.TOP,
+                cursor = cursor,
+                limit  = 50
+            )
+            if (state.seeAllSource != DSTORE_BROWSE_KEY) return@launch   // the user left this list meanwhile
+            if (page == null) {
+                dstoreStopped = true
+                state = state.copy(isLoadingSeeAll = false)
+                return@launch
+            }
+            dstoreCursor  = page.nextCursor
+            dstoreStopped = page.nextCursor == null
+            val seen  = state.seeAllApps.map { it.id }.toHashSet()
+            val fresh = page.apps.map { it.toUnifiedRepo() }.filter { seen.add(it.id) }
+            state = state.copy(
+                seeAllApps      = if (fresh.isEmpty()) state.seeAllApps else zealotFirst(dedupeByPackage(state.seeAllApps + fresh)),
+                seeAllPage      = state.seeAllPage + 1,
+                isLoadingSeeAll = false
+            )
         }
     }
 
@@ -1944,6 +2016,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadMoreSeeAll() {
         val cdnKey = state.seeAllSource
+        if (cdnKey == DSTORE_BROWSE_KEY) { loadMoreDStore(); return }
         if (cdnKey != null) { loadMoreCdnSource(cdnKey); return }
         if (state.isLoadingSeeAll || state.seeAllQuery.isEmpty()) return
         val next = state.seeAllPage + 1
@@ -2030,7 +2103,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     repo.source != AppSource.GITHUB &&
                     repo.source != AppSource.IZZY
             if (isCdnSource) {
-                val hasApk = repo.apkUrl.isNotBlank()
+                // 7.b.iv.zi: a D-Store card is never installable here (unsigned third-party row; decision
+                // 5a/5b, leaf 7.b.ii.zi). No asset means the detail screen never offers Install or Download.
+                val hasApk = repo.apkUrl.isNotBlank() && repo.source != AppSource.DSTORE
                 val syntheticRelease = Release(
                     tag_name     = repo.cdnVersion.ifBlank { "Latest" },
                     name         = repo.name,
@@ -2138,6 +2213,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun downloadAndInstall(repo: GitHubRepo, asset: ReleaseAsset) {
+        if (repo.source == AppSource.DSTORE) return   // 7.b.iv.zi: not installable until 7.b.ii.zi (decision 5a/5b)
         val job = viewModelScope.launch {
             updateInstall(repo.id) { copy(downloadProgress = 0f, error = null, repo = repo) }
             val outFile = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "${repo.name}_${asset.name}")
