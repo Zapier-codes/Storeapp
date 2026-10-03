@@ -1,3 +1,7 @@
+// Imported here because inside a Gradle Kotlin script `java` is the Java plugin extension, so the
+// fully qualified `java.util.Properties()` does not compile (CI run 37121169324, line 10).
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -7,7 +11,7 @@ plugins {
 // `app/tenant.properties` (gitignored) from distr's build-config answer before it builds; nobody
 // edits it by hand. Absent file = a plain checkout, where the `tenant` flavor only has to configure
 // (so IDE sync and `./gradlew assemble` keep working) and an explicit tenant task is refused below.
-val tenantProps = java.util.Properties().apply {
+val tenantProps = Properties().apply {
     val f = file("tenant.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
