@@ -1979,7 +1979,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e }
             }
 
-            j1.join(); j2.join(); j3.join(); j4.join(); j5.join(); j6.join()
+            val j7 = launch {
+                // 7.b.iv.zo: D-Store's catalog (GET /api/catalog?q=), first page only (20 hits, `top` order).
+                // Asked only when the filters leave it meaningful: its apps are Android APK listings, so
+                // only the ALL and ANDROID platform filters, and it has no topic filter to honour, so none
+                // when sub-categories are selected (they would be silently ignored, showing unfiltered hits).
+                // Unconfigured (blank base URL), failed or empty: contributes nothing and shows no error.
+                // Unsigned third-party rows: they merge through `merge` like any other source, so a Zealot
+                // copy wins (`dedupeByPackage`/`zealotFirst`) and a D-Store card is never installable.
+                if (state.selectedSubCategories.isNotEmpty()) return@launch
+                if (state.platform != AppPlatform.ALL && state.platform != AppPlatform.ANDROID) return@launch
+                try {
+                    val page = com.vythera.vyxelapps.api.DStoreCatalogClient.page(
+                        order = com.vythera.vyxelapps.api.DStoreOrder.TOP,
+                        query = qt,
+                        limit = 20
+                    )
+                    if (page != null) mutex.withLock { merge(page.apps.map { it.toUnifiedRepo() }) }
+                } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e }
+            }
+
+            j1.join(); j2.join(); j3.join(); j4.join(); j5.join(); j6.join(); j7.join()
             state = state.copy(isSearching = false)
         }
     }
