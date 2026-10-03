@@ -3041,6 +3041,7 @@ fun AppDetailScreen(
                                     AppSource.FLATHUB  -> "Flathub Developer"
                                     AppSource.WINGET   -> "Winget Developer"
                                     AppSource.ZEALOT   -> "Zealot Developer"
+                                    AppSource.DSTORE   -> "D-Store Developer"
                                     else               -> "GitHub Developer"
                                 }
                                 Text(devLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3913,6 +3914,7 @@ fun detectPlatformLabels(repo: GitHubRepo): List<AppPlatform> {
     // Android — source is the most reliable signal
     val isAndroid = repo.source == AppSource.FDROID ||
         repo.source == AppSource.IZZY ||
+        repo.source == AppSource.DSTORE ||   // 7.b.iii.zi: every row of D-Store's catalog is an Android APK listing
         "android" in text || "apk" in text ||
         lang == "kotlin" || lang == "java" || lang == "dart"
     if (isAndroid) platforms.add(AppPlatform.ANDROID)

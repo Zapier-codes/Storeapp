@@ -52,7 +52,11 @@ enum class AppSource(val label: String, val colorHex: Long) {
     WINGET   ("Winget",      0xFFFFD966L),
     // 1.a.i.zi — addressable stub only; ZealotClient/verification/converter land in 1.a.i.zo–1.a.ii.zo.
     // Color matches Zealot's own primary brand color (app/assets/stylesheets/_button.scss, --bs-primary-bg).
-    ZEALOT   ("Zealot",      0xFF3F6791L)
+    ZEALOT   ("Zealot",      0xFF3F6791L),
+    // 7.b.iii.zi — D-Store's own catalog API (the apps Zealot's index lacks). Addressable only: no client
+    // (7.b.iii.zo), no browse or search wiring (7.b.iv.zi/zo), and its install is disabled until D-Store
+    // decision 5a/5b. Color is D-Store's own accent-strong gold (--color-accent-strong, #b8942e).
+    DSTORE   ("D-Store",     0xFFB8942EL)
 }
 
 data class GitHubRepo(
@@ -1262,6 +1266,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openSourceBrowse(source: AppSource) {
+        // 7.b.iii.zi: D-Store has no browse path until 7.b.iv.zi. Without this, `cdnKey` below would be null
+        // and the final `else` would run a GitHub topic search titled "D-Store Apps", which is wrong data
+        // under a right-looking name. Nothing calls this with DSTORE today (no screen lists it).
+        if (source == AppSource.DSTORE) return
         val cdnKey = when (source) {
             AppSource.FDROID   -> "fdroid"
             AppSource.GITLAB   -> "gitlab"
