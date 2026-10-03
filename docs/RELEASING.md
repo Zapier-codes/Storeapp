@@ -11,6 +11,7 @@ The workflow is `.github/workflows/release-aab.yml`; this page is the operator's
 | **build** | Builds the unsigned `.aab`, reads its manifest back and checks it carries the planned application id, versionName and versionCode | any build error, or a bundle that disagrees with the plan |
 | **publish** | Uploads the bundle to Zealot with the per-app token, **held** (`hold=true`); expects `201` | any other answer |
 | **record** | Creates tag `vX.Y.Z` and a GitHub Release with the bundle attached. The only job that can write to the repository | the release already exists |
+| **listing** | Beside **record**: sends the listing text (`short_description`, `description`; the name only if `SYNC_APP_NAME` is `true`) from the build's `listing.json` to Zealot's draft (`PATCH /api/apps/<app id>/listing_edit`), then publishes it (`POST .../commit`). The app id comes from the upload's answer | Zealot refuses the text, a draft with other unpublished edits already exists, or the upload's answer had no app id |
 
 "Built from" means `app/` (except `app/src/test` and `app/src/androidTest`), `build.gradle.kts`,
 `settings.gradle.kts`, `gradle.properties`, `gradle/`, `gradlew`, `gradlew.bat` and `version.properties`.
@@ -31,6 +32,7 @@ workflow's `on.push.paths` and in the plan job; change both together.
 | What | Where | Set by |
 |---|---|---|
 | Secret `ZEALOT_APP_TOKEN`, variables `ZEALOT_URL`, `ZEALOT_CHANNEL_KEY` | repository secrets and variables | `bin/bootstrap-publishing --only app` (Zealot) |
+| Variable `SYNC_APP_NAME` = `true` (optional) | `gh variable set SYNC_APP_NAME -b true -R Zapier-codes/Storeapp` | you, only if the store name should follow the app's launcher label |
 | Variable `AUTO_RELEASE` = `true` | `gh variable set AUTO_RELEASE -b true -R Zapier-codes/Storeapp` | you, **after one manual run has uploaded correctly** |
 
 Until `AUTO_RELEASE` is `true`, a push builds and checks the bundle but uploads nothing. Set it back to
@@ -59,6 +61,32 @@ curl -X POST -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
 
 Releasing automatically, after waiting for the compile, is leaf `7.a.x.zo`; it needs Zealot to report the
 compile state first (Zealot leaves 30 and 31).
+
+## The listing text
+
+Each release also sends the committed `listing/` text to Zealot: the short and long description. Zealot keeps
+the text in a draft and only publishes it on `commit`, so the job stages and commits in one go. Details worth
+knowing:
+
+- **The app's name is not sent** unless `SYNC_APP_NAME` is `true`. The listing's name is the launcher label in
+  the bundle (`Vyxel Apps`), which is not what the app is called in Zealot (`Appstore`); sending it would rename
+  the app on every release.
+- Only a field that differs from what Zealot shows is staged, so a re-run stages nothing and says so.
+- If someone has an **unpublished draft in the console** that edits other fields, the job stops without changing
+  anything, because the commit would publish their edits too. Publish or discard that draft, then re-run only the
+  failed job.
+- The listing job runs beside **record**, not before it: a refused text turns the run red but the bundle stays
+  uploaded and tagged. Actions -> the run -> Re-run failed jobs repeats only the listing.
+- By hand, with the app id from the run summary (or Zealot's app page) and the app token:
+
+```
+curl -X PATCH -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" -H 'Content-Type: application/json' \
+  --data '{"short_description":"...","description":"..."}' https://zealot-deploy-latest.onrender.com/api/apps/<app id>/listing_edit
+curl -X POST -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
+  https://zealot-deploy-latest.onrender.com/api/apps/<app id>/listing_edit/commit
+```
+
+The feature graphic and screenshots are not sent yet (leaves `7.a.x.zi` and Zealot 32 and 33).
 
 ## When it fails
 

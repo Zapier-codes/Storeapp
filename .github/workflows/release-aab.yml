@@ -1,11 +1,17 @@
-# Leaves 7.a.i.zi (build) and 7.a.ix.zi (publish): builds Storeapp's OWN (first-party) release bundle and
-# hands it to Zealot, by itself, whenever a push to `main` actually changes what the app is built from.
+# Leaves 7.a.i.zi (build), 7.a.ix.zi (publish) and 7.a.ix.zo (listing text): builds Storeapp's OWN
+# (first-party) release bundle and hands it to Zealot, by itself, whenever a push to `main` actually changes
+# what the app is built from.
 #
-#   push to main ──► plan ──► build ──► publish ──► record
-#                     │         │          │           └ tag vX.Y.Z + GitHub Release (the only job that can write)
+#   push to main ──► plan ──► build ──► publish ──┬─► record
+#                     │         │          │      │     └ tag vX.Y.Z + GitHub Release (the only job that can write)
+#                     │         │          │      └─► listing
+#                     │         │          │            └ the listing text from listing.json, staged then committed
 #                     │         │          └ held upload to Zealot with the per-app token
 #                     │         └ unsigned .aab + listing.json, checked against the planned version
 #                     └ is a release needed at all? what version? does Zealot already hold it?
+#
+# `record` and `listing` both wait for `publish` and not for each other: a refused listing text turns the run
+# red but never costs the tag of a bundle that was uploaded, and "Re-run failed jobs" repeats only the listing.
 #
 # Why it only runs when a release is needed (three filters, cheapest first):
 #   1. `on.push.paths` below: a push that touches only docs, specs, listing text or workflows starts no run.
@@ -357,6 +363,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       release_id: ${{ steps.upload.outputs.release_id }}
+      app_id: ${{ steps.upload.outputs.app_id }}
     steps:
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
@@ -422,6 +429,18 @@ jobs:
 
           id=$(jq -r '.id' "$RUNNER_TEMP/upload.json")
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
+          # The app's id (not the release's) is what the listing routes are addressed by. Zealot's upload
+          # answer nests the app (`belongs_to :app` in Api::UploadAppSerializer), so it is read from
+          # `.app.id`, with `.app_id` as a second place to look. If neither is a number the upload still
+          # stands (this job stays green, so the tag is recorded) and the `listing` job says so and stops.
+          app_id=$(jq -r '((.app | objects | .id) // .app_id // null) as $v | if ($v | type) == "number" then $v else empty end' \
+            "$RUNNER_TEMP/upload.json")
+          if [ -n "$app_id" ]; then
+            echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Zealot's answer carries no numeric app id (looked at .app.id and .app_id); the listing text will not be applied. Top-level keys: $(jq -r 'keys | join(",")' "$RUNNER_TEMP/upload.json")"
+          fi
           {
             echo "### Uploaded to Zealot (held)"
             echo ""
@@ -467,3 +486,113 @@ jobs:
           } > notes.md
           gh release create "$TAG" "$aab" release-out/listing.json \
             --target "$GITHUB_SHA" --title "Storeapp $NAME" --notes-file notes.md --latest
+
+  # Leaf 7.a.ix.zo. Zealot's listing text goes through a draft: PATCH stages it (nothing live changes), commit
+  # publishes it (Api::Apps::ListingEditsController, Zealot Task 34a-3). It runs beside `record`, not before
+  # it: if Zealot refuses the text the run turns red, but the tag of the uploaded bundle is still recorded and
+  # "Re-run failed jobs" repeats only this job (the app id it needs is a saved output of `publish`).
+  # Re-running is safe: only a field that differs from the live text is staged, so a second run stages nothing.
+  listing:
+    name: Apply the listing text
+    needs: [plan, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: storeapp-release-aab
+          path: release-out
+
+      - name: Stage and publish the listing text
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          APP_ID: ${{ needs.publish.outputs.app_id }}
+          SYNC_APP_NAME: ${{ vars.SYNC_APP_NAME }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+          [[ "${APP_ID:-}" =~ ^[1-9][0-9]{0,17}$ ]] \
+            || fail "no app id came out of the upload step (see its warning), so the listing text was not applied; the bundle is uploaded and held. By hand: PATCH /api/apps/<app id>/listing_edit, then POST /api/apps/<app id>/listing_edit/commit (docs/RELEASING.md)"
+          [ -f release-out/listing.json ] || fail "release-out/listing.json is missing from the artifact"
+
+          # What to send. The listing's own name is the bundle's launcher label ("Vyxel Apps" today), which is
+          # not what this app is called in Zealot, so the name is sent only when SYNC_APP_NAME is "true".
+          want="$RUNNER_TEMP/want.json"
+          if [ "${SYNC_APP_NAME:-}" = "true" ]; then
+            jq '{name: .name, short_description: .listing.short_description, description: .listing.description}' \
+              release-out/listing.json > "$want"
+          else
+            jq '{short_description: .listing.short_description, description: .listing.description}' \
+              release-out/listing.json > "$want"
+          fi
+          jq -e 'all(.[]; type == "string" and length > 0)' "$want" > /dev/null \
+            || fail "listing.json has a missing or empty text field (build_listing.py should have refused this)"
+
+          url="${ZEALOT_URL%/}/api/apps/$APP_ID/listing_edit"
+          hdr="$RUNNER_TEMP/zealot-auth.hdr"
+          trap 'rm -f "$hdr"' EXIT
+          (umask 077; printf 'Authorization: Bearer %s\n' "$ZEALOT_APP_TOKEN" > "$hdr")
+
+          # api METHOD OUTFILE RETRIES [curl args...] prints the HTTP status. GET and PATCH may be retried (the
+          # same request twice stages the same text); the commit may not (a second one would answer 404).
+          api() {
+            local method="$1" out="$2" retries="$3"; shift 3
+            curl -sS -o "$out" -w '%{http_code}' --max-time 60 --retry "$retries" --retry-delay 5 \
+              -X "$method" -H "@$hdr" -H 'Accept: application/json' "$@"
+          }
+          show() { head -c 1200 "$1" || true; echo; }
+
+          # 1. Look before touching. A draft that someone started in the console would be published by our
+          #    commit along with our text, so a draft that stages a field we do not send stops the job.
+          status=$(api GET "$RUNNER_TEMP/before.json" 3 "$url") || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            show "$RUNNER_TEMP/before.json"
+            fail "Zealot answered $status to GET listing_edit (401 = bad ZEALOT_APP_TOKEN, 403 = the token belongs to another app, 404 = no app $APP_ID)"
+          fi
+          foreign=$(jq -r --slurpfile w "$want" '((.staged // {}) | keys) - ($w[0] | keys) | join(", ")' "$RUNNER_TEMP/before.json")
+          [ -z "$foreign" ] \
+            || fail "Zealot already holds an unpublished draft that also edits: $foreign. Publish or discard it in the console first; nothing was changed"
+
+          # 2. Stage. Zealot keeps only the fields that differ from the live text.
+          status=$(api PATCH "$RUNNER_TEMP/patch.json" 3 -H 'Content-Type: application/json' --data "@$want" "$url") \
+            || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            show "$RUNNER_TEMP/patch.json"
+            fail "Zealot answered $status to PATCH listing_edit (422 = it refused the text; the reasons are above)"
+          fi
+          staged=$(jq -r '(.staged // {}) | keys | join(", ")' "$RUNNER_TEMP/patch.json")
+
+          # 3. Publish the draft, if there is one.
+          if [ "$(jq -r '.draft' "$RUNNER_TEMP/patch.json")" != "true" ]; then
+            {
+              echo "### Listing text"
+              echo ""
+              echo "Zealot already shows this text; nothing was staged or published."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          status=$(api POST "$RUNNER_TEMP/commit.json" 0 "$url/commit") \
+            || fail "the commit request to ${ZEALOT_URL%/} failed before Zealot answered; check the app's listing page, a draft may be waiting"
+          if [ "$status" != "200" ]; then
+            show "$RUNNER_TEMP/commit.json"
+            fail "Zealot answered $status to commit (the draft stays staged in Zealot; fix or discard it there)"
+          fi
+          jq -e '.committed | type == "boolean"' "$RUNNER_TEMP/commit.json" > /dev/null \
+            || { show "$RUNNER_TEMP/commit.json"; fail "Zealot answered 200 to commit but not with committed true or false"; }
+          committed=$(jq -r '.committed' "$RUNNER_TEMP/commit.json")
+
+          {
+            echo "### Listing text"
+            echo ""
+            echo "- App id: \`$APP_ID\`"
+            echo "- Fields sent: $(jq -r 'keys | join(", ")' "$want")"
+            echo "- Fields that differed and were staged: ${staged:-none}"
+            echo "- Published: **$committed**"
+            if [ "${SYNC_APP_NAME:-}" != "true" ]; then
+              echo "- The name was not sent (repository variable SYNC_APP_NAME is not \`true\`): Zealot keeps its own app name."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
