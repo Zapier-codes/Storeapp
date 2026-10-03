@@ -695,10 +695,14 @@ object ZealotClient {
         try {
             val indexReq = okhttp3.Request.Builder().url("$base/index.json").build()
             val sigReq   = okhttp3.Request.Builder().url("$base/index.json.sig").build()
-            val indexDeferred = kotlinx.coroutines.async { http.newCall(indexReq).execute() }
-            val sigDeferred   = kotlinx.coroutines.async { http.newCall(sigReq).execute() }
+            val indexDeferred = async { try { http.newCall(indexReq).execute() } catch (_: Exception) { null } }
+            val sigDeferred   = async { try { http.newCall(sigReq).execute() } catch (_: Exception) { null } }
             val indexResp = indexDeferred.await()
             val sigResp   = sigDeferred.await()
+            if (indexResp == null || sigResp == null) {
+                indexResp?.close(); sigResp?.close()
+                return@withContext null
+            }
             indexResp.use { iResp ->
                 sigResp.use { sResp ->
                     if (!iResp.isSuccessful || !sResp.isSuccessful) return@withContext null

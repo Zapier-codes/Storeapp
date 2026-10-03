@@ -101,7 +101,6 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
     val homeListState = rememberLazyListState()
 
     var selectedTab   by remember { mutableStateOf(VAppTab.HOME) }
-    var selectedCategory by remember { mutableStateOf<HomeCategory?>(null) } // null = "For You"
     var selectedRepo  by remember { mutableStateOf<GitHubRepo?>(null) }
     var showSeeAll    by remember { mutableStateOf(false) }
     var showCompare by remember { mutableStateOf(false) }
@@ -589,6 +588,7 @@ fun HomeTab(
     val theme = LocalTheme.current
     val strings = LocalStrings.current
     var isRefreshing by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<HomeCategory?>(null) } // null = "For You"
 
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) isRefreshing = false
@@ -757,8 +757,10 @@ fun HomeTab(
                     // already-loaded, typically-small lists on each content recomposition is
                     // cheap enough not to need memoizing.
                     val trendingWithZealot = (state.zealotApps + state.trending).distinctBy { it.id }
-                    if (selectedCategory != null) {
-                        val categoryApps = when (selectedCategory) {
+                    // A delegated property cannot be smart-cast, so read it once into a val.
+                    val activeCategory = selectedCategory
+                    if (activeCategory != null) {
+                        val categoryApps = when (activeCategory) {
                             HomeCategory.TRENDING      -> trendingWithZealot
                             HomeCategory.MEDIA         -> state.media
                             HomeCategory.TOOLS         -> state.tools
@@ -778,9 +780,9 @@ fun HomeTab(
                             HomeCategory.CLOUD_STORAGE -> state.cloudStorage
                             HomeCategory.COOKING       -> state.cooking
                         }
-                        item(key = "category_${selectedCategory.name}") {
+                        item(key = "category_${activeCategory.name}") {
                             CategoryAppList(
-                                title      = selectedCategory.label(strings),
+                                title      = activeCategory.label(strings),
                                 apps       = categoryApps,
                                 installed  = installed,
                                 onAppClick = onAppClick

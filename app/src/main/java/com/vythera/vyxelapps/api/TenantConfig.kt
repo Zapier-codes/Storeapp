@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -197,14 +198,18 @@ object TenantConfig {
         val url = configUrl.trim()
         if (url.isEmpty()) return@withContext
         try {
-            val configDeferred = kotlinx.coroutines.async {
-                http.newCall(Request.Builder().url(url).build()).execute()
+            val configDeferred = async {
+                try { http.newCall(Request.Builder().url(url).build()).execute() } catch (_: Exception) { null }
             }
-            val sigDeferred = kotlinx.coroutines.async {
-                http.newCall(Request.Builder().url("$url.sig").build()).execute()
+            val sigDeferred = async {
+                try { http.newCall(Request.Builder().url("$url.sig").build()).execute() } catch (_: Exception) { null }
             }
             val configResp = configDeferred.await()
             val sigResp     = sigDeferred.await()
+            if (configResp == null || sigResp == null) {
+                configResp?.close(); sigResp?.close()
+                return@withContext
+            }
             configResp.use { cResp ->
                 sigResp.use { sResp ->
                     if (!cResp.isSuccessful || !sResp.isSuccessful) return@withContext
