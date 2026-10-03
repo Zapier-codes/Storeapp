@@ -1,0 +1,14 @@
+# Keeps the GitHub Actions used by the workflows current. The release workflow pins every action to a
+# full commit SHA (a moving tag such as @v5 can be re-pointed); Dependabot bumps the SHA and its
+# "# vN" comment together, as one weekly pull request.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns: ["*"]

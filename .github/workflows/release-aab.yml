@@ -1,110 +1,275 @@
-# Leaf 7.a.i.zi -- builds Storeapp's OWN (first-party) release AAB in CI.
+# Leaves 7.a.i.zi (build) and 7.a.ix.zi (publish): builds Storeapp's OWN (first-party) release bundle and
+# hands it to Zealot, by itself, whenever a push to `main` actually changes what the app is built from.
 #
-# Separate on purpose from `build-tenant-apk.yml`: that one builds one distr-provisioned white-label
-# APK for a tenant; this one builds the `default` flavor, the store's own app, as an Android App
-# Bundle. Nothing here reads distr, a tenant config or a tenant secret.
+#   push to main ──► plan ──► build ──► publish ──► record
+#                     │         │          │           └ tag vX.Y.Z + GitHub Release (the only job that can write)
+#                     │         │          └ held upload to Zealot with the per-app token
+#                     │         └ unsigned .aab + listing.json, checked against the planned version
+#                     └ is a release needed at all? what version? does Zealot already hold it?
 #
-# The AAB is NOT signed here. Zealot compiles the bundle to APKs and signs them with its own org key
-# (Anthropic::BundletoolService), so no keystore secret is needed for this workflow. The bundle is
-# kept as a workflow artifact beside `listing.json` (leaf 7.a.i.zo: the bundle's own manifest plus the
-# committed `listing/` folder, built by .github/scripts/build_listing.py); leaf 7.a.ii.zo uploads both
-# to Zealot.
+# Why it only runs when a release is needed (three filters, cheapest first):
+#   1. `on.push.paths` below: a push that touches only docs, specs, listing text or workflows starts no run.
+#   2. The plan job diffs the commit against the last GitHub Release marked "Latest" and counts only files
+#      the app is built from (app/ minus its tests, the Gradle files, version.properties). Nothing -> no build.
+#   3. Zealot is asked (GET /api/apps/version_exist) BEFORE the build whether it already holds this
+#      version; if it does, the run ends there. A re-run of the same commit can never upload twice.
+# Keep the list in filter 1 and the `case` in the plan job in step.
 #
-# Fires on a version tag (v*) or by hand from the Actions tab. The version is set by the "Work out the
-# version" step (leaf 7.a.viii.zi): versionName from the tag, versionCode from the run number plus an offset.
+# Version (deterministic: the same commit always gets the same version, so re-runs are idempotent):
+#   versionName = MAJOR.MINOR from version.properties + "." + commits since that file last changed (SemVer)
+#   versionCode = commits on the branch + VERSION_CODE_OFFSET (repository variable, default 100)
+# Tags are an OUTPUT of a release here (created by `record`), not a trigger: a tag pushed with the
+# repository token could not start another workflow anyway, and a hand-made tag would skip the plan.
+#
+# Safe by default (the pipeline has never completed a run): a push builds and checks the bundle but uploads
+# nothing until the repository variable AUTO_RELEASE is "true". By hand (Actions -> Run workflow) it is a
+# dry run unless dry_run is switched off; only `main` ever uploads.
+#
+# The AAB is NOT signed here. Zealot compiles it to APKs and signs them with its org key
+# (Anthropic::BundletoolService), so no keystore secret exists in this repository. The upload is HELD:
+# nothing reaches the catalog until the release is released (leaf 7.a.x.zo will do that after waiting
+# for the compile; until then, docs/RELEASING.md has the one command).
+#
+# Needs (set by bin/bootstrap-publishing in Zealot): secret ZEALOT_APP_TOKEN; variables ZEALOT_URL,
+# ZEALOT_CHANNEL_KEY. Optional variables: AUTO_RELEASE, VERSION_CODE_OFFSET.
+# Every action is pinned to a commit SHA; Dependabot (.github/dependabot.yml) moves the pins.
 name: Release AAB
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths:
+      - "app/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "version.properties"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = plan, build and check only; false = also upload to Zealot (main only)"
+        type: boolean
+        default: true
+      force:
+        description: "Build even when nothing the app is built from changed since the last release"
+        type: boolean
+        default: false
 
-# One build per ref at a time; a repeated run for the same ref waits instead of racing.
+# One release pipeline at a time, never cut off midway. A newer push waits for the running one; GitHub keeps
+# only the newest waiting run, which is enough because the plan diffs against the last release, not the last push.
 concurrency:
-  group: release-aab-${{ github.ref }}
+  group: release-aab
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      publish: ${{ steps.plan.outputs.publish }}
+      code: ${{ steps.plan.outputs.code }}
+      name: ${{ steps.plan.outputs.name }}
+      tag: ${{ steps.plan.outputs.tag }}
+      bundle_id: ${{ steps.plan.outputs.bundle_id }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0 # the version and the diff are read from history and tags
+          persist-credentials: false
+
+      - name: Decide
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          OFFSET: ${{ vars.VERSION_CODE_OFFSET }}
+          AUTO_RELEASE: ${{ vars.AUTO_RELEASE }}
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_CHANNEL_KEY: ${{ vars.ZEALOT_CHANNEL_KEY }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          # 1. The version this commit would ship.
+          offset="${OFFSET:-100}"
+          [[ "$offset" =~ ^(0|[1-9][0-9]{0,8})$ ]] \
+            || fail "VERSION_CODE_OFFSET must be a whole number without leading zeros, got '$offset'"
+          code=$(( $(git rev-list --count HEAD) + offset ))
+          [ "$code" -le 2100000000 ] || fail "versionCode $code is above Android's limit of 2100000000"
+
+          [ -f version.properties ] || fail "version.properties is missing (it holds major_minor=<major>.<minor>)"
+          base=$(sed -n 's/^[[:space:]]*major_minor[[:space:]]*=[[:space:]]*\([^[:space:]]*\)[[:space:]]*$/\1/p' version.properties | head -n 1)
+          [[ "$base" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+            || fail "version.properties needs a line major_minor=<major>.<minor> (numbers, no leading zeros), got '$base'"
+          anchor=$(git log -n 1 --format=%H -- version.properties)
+          [ -n "$anchor" ] || fail "version.properties is not committed"
+          name="$base.$(git rev-list --count "$anchor"..HEAD)"
+          tag="v$name"
+          head_sha=$(git rev-parse HEAD)
+
+          bundle_id=$(sed -n 's/^[[:space:]]*applicationId = "\([a-z][a-z0-9_.]*\)"[[:space:]]*$/\1/p' app/build.gradle.kts | head -n 1)
+          [ -n "$bundle_id" ] || fail "could not read applicationId from app/build.gradle.kts"
+
+          # 2. Is a release needed?
+          release=false
+          reason=""
+          last_tag=$(gh release list --exclude-drafts --limit 30 --json tagName,isLatest \
+            --jq '[.[] | select(.isLatest)][0].tagName // empty')
+
+          tag_on_head=false
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            if [ "$(git rev-list -n 1 "$tag")" = "$head_sha" ]; then
+              tag_on_head=true
+            else
+              fail "tag $tag already exists on another commit; raise major_minor in version.properties"
+            fi
+          fi
+
+          if [ "$INPUT_FORCE" = "true" ]; then
+            release=true
+            reason="forced from the Actions tab"
+          elif [ "$tag_on_head" = "true" ]; then
+            reason="$tag already points at this commit, so it was released"
+          elif [ -z "$last_tag" ]; then
+            release=true
+            reason="no earlier release exists"
+          else
+            last_sha=$(git rev-list -n 1 "$last_tag" 2> /dev/null || true)
+            if [ -z "$last_sha" ] || ! git merge-base --is-ancestor "$last_sha" "$head_sha"; then
+              release=true
+              reason="the last release ($last_tag) is not in this commit's history, so the diff cannot be trusted"
+            else
+              relevant=0
+              while IFS= read -r f; do
+                case "$f" in
+                  app/src/test/* | app/src/androidTest/*) ;;
+                  app/* | build.gradle.kts | settings.gradle.kts | gradle.properties | gradle/* | gradlew | gradlew.bat | version.properties)
+                    relevant=$((relevant + 1))
+                    if [ "$relevant" -le 20 ]; then echo "release-relevant: $f"; fi
+                    ;;
+                esac
+              done < <(git diff --name-only "$last_sha" "$head_sha")
+              if [ "$relevant" -gt 0 ]; then
+                release=true
+                reason="$relevant file(s) the app is built from changed since $last_tag"
+              else
+                reason="nothing the app is built from changed since $last_tag"
+              fi
+            fi
+          fi
+
+          # 3. Would it be uploaded, or only built and checked?
+          publish=false
+          note=""
+          if [ "$release" = "true" ]; then
+            if [ "$REF" != "refs/heads/main" ]; then
+              note="${REF#refs/heads/} is not main: the bundle is built and checked, nothing is uploaded"
+            elif [ "$EVENT" = "workflow_dispatch" ]; then
+              if [ "$INPUT_DRY_RUN" = "false" ]; then
+                publish=true
+              else
+                note="dry run: the bundle is built and checked, nothing is uploaded"
+              fi
+            elif [ "$AUTO_RELEASE" = "true" ]; then
+              publish=true
+            else
+              note="repository variable AUTO_RELEASE is not 'true': the bundle is built and checked, nothing is uploaded"
+            fi
+          fi
+
+          # 4. Does Zealot already hold this exact version? (No token needed: the channel key is the lookup.)
+          if [ "$release" = "true" ] && [ "$publish" = "true" ]; then
+            [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+            [ -n "${ZEALOT_CHANNEL_KEY:-}" ] || fail "repository variable ZEALOT_CHANNEL_KEY is not set"
+            status=$(curl -sS -G -o "$RUNNER_TEMP/exist.json" -w '%{http_code}' \
+              --max-time 120 --retry 3 --retry-delay 5 \
+              --data-urlencode "channel_key=$ZEALOT_CHANNEL_KEY" \
+              --data-urlencode "bundle_id=$bundle_id" \
+              --data-urlencode "release_version=$name" \
+              --data-urlencode "build_version=$code" \
+              "${ZEALOT_URL%/}/api/apps/version_exist") || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+            case "$status" in
+              200)
+                release=false
+                reason="Zealot already holds $name ($code) for $bundle_id"
+                ;;
+              404) ;;
+              *)
+                head -c 800 "$RUNNER_TEMP/exist.json" || true
+                echo
+                fail "Zealot answered $status to version_exist (401 = wrong ZEALOT_CHANNEL_KEY)"
+                ;;
+            esac
+          fi
+
+          {
+            echo "release=$release"
+            echo "publish=$publish"
+            echo "code=$code"
+            echo "name=$name"
+            echo "tag=$tag"
+            echo "bundle_id=$bundle_id"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Release plan"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version | \`$name\` (versionCode \`$code\`) |"
+            echo "| Application id | \`$bundle_id\` |"
+            echo "| Commit | \`${head_sha:0:7}\` on \`${REF#refs/heads/}\` |"
+            echo "| Last release | ${last_tag:-none} |"
+            echo "| Release needed | **$release** ($reason) |"
+            echo "| Upload to Zealot | **$publish** ${note:+($note)} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::release=$release publish=$publish version=$name code=$code: $reason${note:+; $note}"
+
   build:
+    name: Build
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      VERSION_CODE: ${{ needs.plan.outputs.code }}
+      VERSION_NAME: ${{ needs.plan.outputs.name }}
+      BUNDLE_ID: ${{ needs.plan.outputs.bundle_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
 
-      # Leaf 7.a.viii.zi: the release version rises with every release. Before this step, versionCode 3 and
-      # versionName 1.0.2 were hardcoded in app/build.gradle.kts, so a second run carried the first one's
-      # version. Now:
-      #   versionCode = this workflow's run number + an offset. The run number only grows, and a re-run of
-      #                 the SAME run keeps its code (so Zealot can recognise it as the same release, leaf 29).
-      #                 The offset is 100 unless the repository variable VERSION_CODE_OFFSET says otherwise;
-      #                 the highest versionCode this repo's history ever held is 3, so 100 clears it. Raise
-      #                 the variable if Zealot already holds a Storeapp release above that.
-      #   versionName = the tag without its leading "v" (v1.2.3 gives 1.2.3). A manual run on a branch has
-      #                 no tag, so versionName keeps app/build.gradle.kts's default and only the code moves.
-      # Values go in through env, never spliced into the script, and are checked before Gradle sees them.
-      - name: Work out the version
-        id: version
-        run: |
-          set -euo pipefail
-          offset="${OFFSET:-100}"
-          [[ "$offset" =~ ^(0|[1-9][0-9]{0,8})$ ]] \
-            || { echo "::error::VERSION_CODE_OFFSET must be a whole number without leading zeros, got '$offset'"; exit 1; }
-          code=$((RUN_NUMBER + offset))
-          [ "$code" -le 2100000000 ] \
-            || { echo "::error::versionCode $code is above Android's limit of 2100000000"; exit 1; }
-          name=""
-          if [ "$REF_TYPE" = "tag" ]; then
-            name="${REF_NAME#v}"
-            [[ "$name" =~ ^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z.]+)?$ ]] \
-              || { echo "::error::tag '$REF_NAME' is not v<major>.<minor>[.<patch>][-suffix], so it cannot be a versionName"; exit 1; }
-          fi
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Version"
-            echo ""
-            echo "- versionCode: \`$code\` (run number $RUN_NUMBER + offset $offset)"
-            if [ -n "$name" ]; then
-              echo "- versionName: \`$name\` (from the tag)"
-            else
-              echo "- versionName: the default in app/build.gradle.kts (no tag on this run)"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-        env:
-          OFFSET: ${{ vars.VERSION_CODE_OFFSET }}
-          RUN_NUMBER: ${{ github.run_number }}
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-
-      # `default` is the flavor that keeps today's applicationId. The task name has no "Tenant" in it,
-      # so app/build.gradle.kts does not ask for app/tenant.properties.
+      # The `default` flavor is the store's own applicationId; its task name has no "Tenant" in it, so
+      # app/build.gradle.kts does not ask for app/tenant.properties. Version values come from the plan job and
+      # go in through env, never spliced into the script. The chmod is defence in depth: the mode is 100755
+      # in git, but a checkout that loses the bit would otherwise fail with exit 126 (run 37118356439).
       - name: Build the release bundle
         run: |
           set -euo pipefail
-          args=("-PreleaseVersionCode=$VERSION_CODE")
-          if [ -n "$VERSION_NAME" ]; then
-            args+=("-PreleaseVersionName=$VERSION_NAME")
-          fi
-          # gradlew was committed without its execute bit (100644), which made the first run exit 126.
-          # The mode is fixed in git too; this line keeps a checkout that loses the bit from failing the same way.
           chmod +x ./gradlew
-          ./gradlew --no-daemon --console=plain "${args[@]}" :app:bundleDefaultRelease
-        env:
-          VERSION_CODE: ${{ steps.version.outputs.code }}
-          VERSION_NAME: ${{ steps.version.outputs.name }}
+          ./gradlew --no-daemon --console=plain \
+            "-PreleaseVersionCode=$VERSION_CODE" "-PreleaseVersionName=$VERSION_NAME" \
+            :app:bundleDefaultRelease
 
       - name: Check the bundle
         id: aab
@@ -116,21 +281,20 @@ jobs:
           files=("$dir"/*.aab)
           [ "${#files[@]}" -eq 1 ] || { echo "::error::expected exactly one .aab in $dir, found ${#files[@]}"; exit 1; }
           aab="${files[0]}"
-          # An AAB is a zip whose base module holds the manifest the listing leaf will read.
+          # An AAB is a zip whose base module holds the manifest the listing step reads.
           unzip -l "$aab" | grep -q ' base/manifest/AndroidManifest.xml$' \
             || { echo "::error::$aab has no base/manifest/AndroidManifest.xml"; exit 1; }
-          sha=$(sha256sum "$aab" | cut -d' ' -f1)
           echo "path=$aab" >> "$GITHUB_OUTPUT"
           {
             echo "### Release AAB"
             echo ""
             echo "- File: \`$(basename "$aab")\` ($(stat -c %s "$aab") bytes)"
-            echo "- SHA-256: \`$sha\`"
+            echo "- SHA-256: \`$(sha256sum "$aab" | cut -d' ' -f1)\`"
             echo "- Ref: \`$GITHUB_REF_NAME\` at \`$GITHUB_SHA\`"
             echo "- Unsigned: Zealot signs the APKs it compiles from this bundle."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -148,9 +312,10 @@ jobs:
           echo "$want  $jar" | sha256sum -c -
           echo "jar=$jar" >> "$GITHUB_OUTPUT"
 
-      # The bundle's own manifest (applicationId, version, label, SDK levels, permissions) plus the
-      # committed listing/ folder (text, category, changelog, screenshots, feature graphic) in one file.
-      # Fails, rather than guessing, when the manifest cannot be read or a listing file breaks a rule.
+      # The bundle's own manifest plus the committed listing/ folder in one file. Fails, rather than
+      # guessing, when the manifest cannot be read, a listing file breaks a rule, or the bundle does not
+      # carry the application id, versionCode and versionName the plan asked for (so a dropped Gradle
+      # property can never ship an old version under a new number).
       - name: Build listing.json
         id: listing
         run: |
@@ -159,15 +324,10 @@ jobs:
           out="$RUNNER_TEMP/release-out"
           mkdir -p "$out"
           python .github/scripts/build_listing.py "$AAB" "$JAR" listing "$out/listing.json"
-          # Leaf 7.a.viii.zi: the bundle's own manifest must carry the version this run asked for. If the
-          # Gradle properties were ever dropped, the build would still succeed with the default version and
-          # a second release would look like the first; this turns that into a failed run.
-          jq -e --argjson code "$VERSION_CODE" '.manifest.version_code == $code' "$out/listing.json" > /dev/null \
-            || { echo "::error::the bundle's versionCode is $(jq -r '.manifest.version_code' "$out/listing.json"), this run asked for $VERSION_CODE"; exit 1; }
-          if [ -n "$VERSION_NAME" ]; then
-            jq -e --arg name "$VERSION_NAME" '.manifest.version_name == $name' "$out/listing.json" > /dev/null \
-              || { echo "::error::the bundle's versionName is $(jq -r '.manifest.version_name' "$out/listing.json"), this run asked for $VERSION_NAME"; exit 1; }
-          fi
+          jq -e --argjson code "$VERSION_CODE" --arg name "$VERSION_NAME" --arg id "$BUNDLE_ID" \
+            '.manifest.version_code == $code and .manifest.version_name == $name and .manifest.application_id == $id' \
+            "$out/listing.json" > /dev/null \
+            || { echo "::error::the bundle says $(jq -r '[.manifest.application_id, .manifest.version_name, (.manifest.version_code|tostring)] | join(" ")' "$out/listing.json"), the plan asked for $BUNDLE_ID $VERSION_NAME $VERSION_CODE"; exit 1; }
           cp "$AAB" "$out/"
           echo "dir=$out" >> "$GITHUB_OUTPUT"
           {
@@ -181,12 +341,129 @@ jobs:
         env:
           AAB: ${{ steps.aab.outputs.path }}
           JAR: ${{ steps.bundletool.outputs.jar }}
-          VERSION_CODE: ${{ steps.version.outputs.code }}
-          VERSION_NAME: ${{ steps.version.outputs.name }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: storeapp-release-aab
           path: ${{ steps.listing.outputs.dir }}
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Upload to Zealot (held)
+    needs: [plan, build]
+    if: needs.plan.outputs.release == 'true' && needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      release_id: ${{ steps.upload.outputs.release_id }}
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: storeapp-release-aab
+          path: release-out
+
+      - name: Upload
+        id: upload
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_CHANNEL_KEY: ${{ vars.ZEALOT_CHANNEL_KEY }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          NAME: ${{ needs.plan.outputs.name }}
+          CODE: ${{ needs.plan.outputs.code }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_CHANNEL_KEY:-}" ] || fail "repository variable ZEALOT_CHANNEL_KEY is not set"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+
+          shopt -s nullglob
+          files=(release-out/*.aab)
+          [ "${#files[@]}" -eq 1 ] || fail "expected exactly one .aab in release-out, found ${#files[@]}"
+          aab="${files[0]}"
+
+          # The listing's changelog is the release note; an empty one falls back to the version line.
+          changelog=$(jq -r '.listing.changelog // ""' release-out/listing.json)
+          if [ -z "$(printf '%s' "$changelog" | tr -d '[:space:]')" ]; then
+            changelog="Version $NAME (build $CODE), commit ${GITHUB_SHA:0:7}."
+          fi
+
+          # The token goes in a header file (mode 600, removed on exit), not on the command line.
+          hdr="$RUNNER_TEMP/zealot-auth.hdr"
+          trap 'rm -f "$hdr"' EXIT
+          (umask 077; printf 'Authorization: Bearer %s\n' "$ZEALOT_APP_TOKEN" > "$hdr")
+
+          # --form-string, not -F, for text: a value starting with "@" or "<" must stay text. No retry: a POST
+          # that reached the server must not be repeated (the plan job's version_exist is the duplicate guard).
+          status=$(curl -sS -o "$RUNNER_TEMP/upload.json" -w '%{http_code}' --max-time 900 \
+            -H "@$hdr" \
+            --form-string "channel_key=$ZEALOT_CHANNEL_KEY" \
+            --form-string "hold=true" \
+            --form-string "source=github-actions" \
+            --form-string "git_commit=$GITHUB_SHA" \
+            --form-string "branch=$GITHUB_REF_NAME" \
+            --form-string "ci_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --form-string "changelog=$changelog" \
+            -F "file=@$aab" \
+            "${ZEALOT_URL%/}/api/apps/upload") || fail "the upload to ${ZEALOT_URL%/} failed before Zealot answered"
+
+          if [ "$status" != "201" ]; then
+            head -c 1500 "$RUNNER_TEMP/upload.json" || true
+            echo
+            fail "Zealot answered $status to the upload (201 expected); nothing was recorded"
+          fi
+
+          # Zealot read the version out of the bundle's own manifest; it must be the one that was planned.
+          jq -e --arg v "$NAME" --arg c "$CODE" \
+            '(.id | type == "number") and ((.release_version | tostring) == $v) and ((.build_version | tostring) == $c)' \
+            "$RUNNER_TEMP/upload.json" > /dev/null \
+            || { head -c 1500 "$RUNNER_TEMP/upload.json" || true; echo; fail "Zealot accepted the upload (201) but its answer does not match $NAME ($CODE); check the release page, it exists and is held"; }
+
+          id=$(jq -r '.id' "$RUNNER_TEMP/upload.json")
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Uploaded to Zealot (held)"
+            echo ""
+            echo "- Release id: \`$id\`, version \`$NAME\` (\`$CODE\`)"
+            echo "- Page: $(jq -r '.release_url // "-"' "$RUNNER_TEMP/upload.json")"
+            echo "- It is **held**: not in the catalog until released. Release it from the console, or with docs/RELEASING.md's one command."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  record:
+    name: Tag and GitHub Release
+    needs: [plan, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # the only job that can write to the repository
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: storeapp-release-aab
+          path: release-out
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          NAME: ${{ needs.plan.outputs.name }}
+          CODE: ${{ needs.plan.outputs.code }}
+          RELEASE_ID: ${{ needs.publish.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(release-out/*.aab)
+          [ "${#files[@]}" -eq 1 ] || { echo "::error::expected exactly one .aab in release-out, found ${#files[@]}"; exit 1; }
+          aab="${files[0]}"
+          {
+            echo "Storeapp $NAME (versionCode $CODE), commit \`${GITHUB_SHA:0:7}\`."
+            echo ""
+            echo "- Uploaded to Zealot as release $RELEASE_ID, held until it is released there."
+            echo "- Unsigned bundle SHA-256: \`$(sha256sum "$aab" | cut -d' ' -f1)\` (Zealot signs the APKs it compiles from it)."
+            echo "- Build: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > notes.md
+          gh release create "$TAG" "$aab" release-out/listing.json \
+            --target "$GITHUB_SHA" --title "Storeapp $NAME" --notes-file notes.md --latest
