@@ -37,7 +37,15 @@
 # for the compile; until then, docs/RELEASING.md has the one command).
 #
 # Needs (set by bin/bootstrap-publishing in Zealot): secret ZEALOT_APP_TOKEN; variables ZEALOT_URL,
-# ZEALOT_CHANNEL_KEY. Optional variables: AUTO_RELEASE, VERSION_CODE_OFFSET.
+# ZEALOT_CHANNEL_KEY. Optional variables: AUTO_RELEASE, VERSION_CODE_OFFSET, ZEALOT_DIRECT_UPLOAD.
+#
+# Two ways to hand the bundle to Zealot (Zealot Task 40h-c-2). Default: one multipart POST to /api/apps/upload.
+# With the repository variable ZEALOT_DIRECT_UPLOAD = "true": open a session (POST /api/apps/upload_sessions),
+# PUT the bundle straight to Zealot's staging bucket with the presigned URL, finalize, then poll
+# GET /api/apps/upload_sessions/<id> until Zealot's CI has read the file and made the held release. Both paths
+# end with the same answer checks and the same outputs (release_id, app_id), so `record` and `listing` do not
+# know which was used. Turn the variable on only after Zealot has the staging bucket, RELEASE_UPLOAD_SESSIONS_ENABLED
+# and its upload workflow in place (docs/RELEASING.md, "Direct upload"); the polling step takes minutes, not seconds.
 # Every action is pinned to a commit SHA; Dependabot (.github/dependabot.yml) moves the pins.
 name: Release AAB
 
@@ -360,7 +368,7 @@ jobs:
     needs: [plan, build]
     if: needs.plan.outputs.release == 'true' && needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     outputs:
       release_id: ${{ steps.upload.outputs.release_id }}
       app_id: ${{ steps.upload.outputs.app_id }}
@@ -376,6 +384,7 @@ jobs:
           ZEALOT_URL: ${{ vars.ZEALOT_URL }}
           ZEALOT_CHANNEL_KEY: ${{ vars.ZEALOT_CHANNEL_KEY }}
           ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          ZEALOT_DIRECT_UPLOAD: ${{ vars.ZEALOT_DIRECT_UPLOAD }}
           NAME: ${{ needs.plan.outputs.name }}
           CODE: ${{ needs.plan.outputs.code }}
         run: |
@@ -401,6 +410,86 @@ jobs:
           trap 'rm -f "$hdr"' EXIT
           (umask 077; printf 'Authorization: Bearer %s\n' "$ZEALOT_APP_TOKEN" > "$hdr")
 
+          if [ "${ZEALOT_DIRECT_UPLOAD:-}" = "true" ]; then
+            # --- Direct upload (Zealot Task 40h-c): session, PUT to the staging bucket, finalize, wait. -----
+            # Nothing here is retried blindly: opening a session and finalizing are safe to repeat on Zealot's
+            # side (finalize is idempotent; an unused session expires), but the plan job's version_exist is
+            # still the duplicate guard, and the wait below only reads.
+            base="${ZEALOT_URL%/}"
+            size=$(stat -c %s "$aab")
+            file_name=$(basename "$aab")
+
+            status=$(curl -sS -o "$RUNNER_TEMP/session.json" -w '%{http_code}' --max-time 60 \
+              -H "@$hdr" \
+              --form-string "channel_key=$ZEALOT_CHANNEL_KEY" \
+              --form-string "filename=$file_name" \
+              --form-string "size=$size" \
+              --form-string "hold=true" \
+              --form-string "source=github-actions" \
+              --form-string "git_commit=$GITHUB_SHA" \
+              --form-string "branch=$GITHUB_REF_NAME" \
+              --form-string "ci_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              --form-string "changelog=$changelog" \
+              "$base/api/apps/upload_sessions") || fail "opening the upload session at $base failed before Zealot answered"
+            if [ "$status" != "201" ]; then
+              head -c 1500 "$RUNNER_TEMP/session.json" || true
+              echo
+              fail "Zealot answered $status to the upload session (201 expected); nothing was uploaded. 404 means direct upload is not switched on in Zealot (RELEASE_UPLOAD_SESSIONS_ENABLED)."
+            fi
+            session_id=$(jq -er '.id | select(type == "number")' "$RUNNER_TEMP/session.json") || fail "the session answer has no numeric id"
+            upload_url=$(jq -er '.upload_url | select(type == "string" and startswith("https://"))' "$RUNNER_TEMP/session.json") || fail "the session answer has no https upload_url"
+            put_method=$(jq -r '.method // "PUT"' "$RUNNER_TEMP/session.json")
+            [ "$put_method" = "PUT" ] || fail "the session asks for a $put_method upload; only PUT is supported here"
+            echo "::add-mask::$upload_url"
+
+            # The presigned URL carries its own signature: no Authorization header goes to the bucket. Any
+            # headers the session names (a signed content type, say) must be sent exactly. PUT is idempotent,
+            # so a failed transfer may be retried.
+            hdr_args=()
+            while IFS= read -r line; do
+              [ -n "$line" ] && hdr_args+=(-H "$line")
+            done < <(jq -r '(.headers // {}) | to_entries[] | "\(.key): \(.value)"' "$RUNNER_TEMP/session.json")
+            status=$(curl -sS -o "$RUNNER_TEMP/put.out" -w '%{http_code}' --max-time 1500 \
+              --retry 3 --retry-all-errors --retry-delay 10 \
+              "${hdr_args[@]}" -X PUT --upload-file "$aab" "$upload_url") || fail "the transfer to the staging bucket failed"
+            case "$status" in 200|201|204) ;; *) head -c 800 "$RUNNER_TEMP/put.out" || true; echo; fail "the staging bucket answered $status to the transfer (2xx expected)";; esac
+
+            status=$(curl -sS -o "$RUNNER_TEMP/finalize.json" -w '%{http_code}' --max-time 120 \
+              -X POST -H "@$hdr" "$base/api/apps/upload_sessions/$session_id/finalize") || fail "finalizing the upload failed before Zealot answered"
+            if [ "$status" != "200" ]; then
+              head -c 1500 "$RUNNER_TEMP/finalize.json" || true
+              echo
+              fail "Zealot answered $status to finalize (200 expected); the bundle is in staging but was not accepted"
+            fi
+
+            # Zealot's CI now reads the file, creates the held release, builds and signs. Wait for the outcome.
+            # `failed` is final; `done` carries the release. About 30 minutes at most (the job allows 45).
+            deadline=$(( $(date +%s) + 1800 ))
+            state=""
+            while :; do
+              status=$(curl -sS -o "$RUNNER_TEMP/poll.json" -w '%{http_code}' --max-time 60 \
+                -H "@$hdr" "$base/api/apps/upload_sessions/$session_id") || status=000
+              if [ "$status" = "200" ]; then
+                state=$(jq -r '.state // ""' "$RUNNER_TEMP/poll.json")
+                [ "$state" = "done" ] && break
+                if [ "$state" = "failed" ] || [ "$state" = "expired" ]; then
+                  head -c 1500 "$RUNNER_TEMP/poll.json" || true
+                  echo
+                  fail "Zealot ended the upload as $state: $(jq -r '.error // "no reason given"' "$RUNNER_TEMP/poll.json")"
+                fi
+              elif [ "$status" != "000" ] && [ "$status" != "429" ] && [ "${status:0:1}" != "5" ]; then
+                head -c 800 "$RUNNER_TEMP/poll.json" || true
+                echo
+                fail "Zealot answered $status while waiting for the upload (200 expected)"
+              fi
+              [ "$(date +%s)" -lt "$deadline" ] || fail "Zealot had not finished the upload after 30 minutes (last state: ${state:-unknown}); check its release page, the upload may still complete and then exists held"
+              sleep 20
+            done
+
+            # Give the shared checks below the shape the multipart answer has: `.id` is the RELEASE id.
+            jq '{id: .release_id, release_version: .release_version, build_version: .build_version,
+                 app: {id: .app_id}, release_url: .release_url}' "$RUNNER_TEMP/poll.json" > "$RUNNER_TEMP/upload.json"
+          else
           # --form-string, not -F, for text: a value starting with "@" or "<" must stay text. No retry: a POST
           # that reached the server must not be repeated (the plan job's version_exist is the duplicate guard).
           status=$(curl -sS -o "$RUNNER_TEMP/upload.json" -w '%{http_code}' --max-time 900 \
@@ -419,6 +508,7 @@ jobs:
             head -c 1500 "$RUNNER_TEMP/upload.json" || true
             echo
             fail "Zealot answered $status to the upload (201 expected); nothing was recorded"
+          fi
           fi
 
           # Zealot read the version out of the bundle's own manifest; it must be the one that was planned.

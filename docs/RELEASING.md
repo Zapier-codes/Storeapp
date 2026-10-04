@@ -88,6 +88,25 @@ curl -X POST -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
 
 The feature graphic and screenshots are not sent yet (leaves `7.a.x.zi` and Zealot 32 and 33).
 
+## Direct upload (optional, off by default)
+
+By default the bundle goes to Zealot in one multipart request. With the repository variable
+`ZEALOT_DIRECT_UPLOAD` = `true` the **Upload** step instead opens a session, sends the bundle straight to Zealot's
+staging bucket with a presigned URL, finalizes, and then waits (up to 30 minutes, polling every 20 seconds) until
+Zealot's own CI has read the file and made the held release. The answer checks and the outputs are the same, so
+`record` and `listing` behave as before. Turn it on only when Zealot has: the staging bucket, its upload workflow
+copied into its storage repo with the keystore secrets, `RELEASE_UPLOAD_SESSIONS_ENABLED` on, and one test upload
+that finished (Zealot's `docs/direct_upload.md`).
+
+```
+gh variable set ZEALOT_DIRECT_UPLOAD -b true -R Zapier-codes/Storeapp    # on
+gh variable delete ZEALOT_DIRECT_UPLOAD -R Zapier-codes/Storeapp         # back to the multipart upload
+```
+
+A `404` on "open the session" means Zealot has the feature switched off. A run that ends "had not finished after 30
+minutes" does not mean the release is lost: look for it in Zealot (it appears held when Zealot's CI completes), and
+do not re-run the workflow until you know, or the next run waits behind a duplicate.
+
 ## When it fails
 
 Read the log, not the status: `bash ~/D-Store/scripts/fetch-ci-log.sh gh Zapier-codes/Storeapp <run id>`, then upload

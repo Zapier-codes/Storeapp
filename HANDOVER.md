@@ -223,6 +223,19 @@ Only the leaves tagged *(Storeapp-repo leaf)* there are built here. This track r
 
 ---
 
+### Operator-directed change, no leaf: Zealot Task 40h-c-2 (Storeapp publishes through the direct upload, behind a variable)
+
+`release-aab.yml`'s **Upload** step has a second path, used only when the repository variable `ZEALOT_DIRECT_UPLOAD`
+is `true`: `POST /api/apps/upload_sessions`, PUT to the presigned URL, finalize, then poll
+`GET /api/apps/upload_sessions/:id` (a read-only door added to Zealot in the same cross-repo change) until `done` or
+`failed`. The multipart upload stays the default and is untouched; both paths end in the same checks and write the
+same `release_id` and `app_id`, so `record` and `listing` are unchanged. The job timeout is 45 minutes (the wait is
+30). Verified: YAML parsed, `bash -n` on every `run` block, and the new branch run once by hand against a mock Zealot
+(a success and a failure answer, jq 1.7). **Not verified:** any real Zealot, the real bucket, the PUT against a real
+presigned URL. **Needs Zealot first:** the staging bucket, `RELEASE_UPLOAD_SESSIONS_ENABLED`, the stage-1/2 workflow
+(Zealot 40i-a/c, patch pending at the time of writing) and the new `GET` door; apply the Zealot patch before turning
+the variable on. Docs: `docs/RELEASING.md`, "Direct upload".
+
 ## 3. Handoff process
 
 Same as D-Store's — but inlined here in full, not just referenced, because a
