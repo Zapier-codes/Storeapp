@@ -1,182 +1,52 @@
-# Leaf f.vi -- builds ONE distr-provisioned tenant APK and publishes it as a GitHub Release asset.
-#
-# Fired by distr's build dispatch (f.iii): POST /repos/{repo}/actions/workflows/build-tenant-apk.yml/dispatches
-# with {"ref": "main", "inputs": {"tenant_config_id": "<uuid>"}}. The file name and the input name are
-# the contract; renaming either makes that dispatch answer 422.
-#
-# Flow: fetch the tenant's config from distr (f.iv.zi) -> prepare the `tenant` Gradle flavor inputs
-# -> build -> zipalign + sign -> cut one Release with the APK as its asset -> report the release and
-# asset IDENTIFIERS (never a URL) back to distr (f.iv.zo) from a step that runs on success AND failure.
-#
-# Repository secrets: DISTR_BASE_URL (https://<distr host>, no path), STOREAPP_BUILD_CONFIG_TOKEN (the
-# SAME value as distr's env var of that name), TENANT_KEYSTORE_BASE64, TENANT_KEYSTORE_PASSWORD,
-# TENANT_KEY_ALIAS, TENANT_KEY_PASSWORD.
-name: Build tenant APK
+name: Build Tenant APK (Unsigned & Harvest)
 
 on:
   workflow_dispatch:
     inputs:
-      tenant_config_id:
-        description: "distr TenantConfig id (UUID) to build"
+      build_id:
+        description: "distr build id"
         required: true
         type: string
-
-# One run per tenant record at a time; a repeated dispatch for the same record waits instead of racing.
-concurrency:
-  group: tenant-build-${{ inputs.tenant_config_id }}
-  cancel-in-progress: false
-
-permissions:
-  contents: write # gh release create; nothing else is needed
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      TENANT_CONFIG_ID: ${{ inputs.tenant_config_id }}
-      DISTR_BASE_URL: ${{ secrets.DISTR_BASE_URL }}
-      BUILD_TOKEN: ${{ secrets.STOREAPP_BUILD_CONFIG_TOKEN }}
     steps:
-      - name: Check the input and secrets
-        run: |
-          set -euo pipefail
-          fail() { echo "$1" > "$RUNNER_TEMP/fail_reason"; echo "::error::$1"; exit 1; }
-          [[ "$TENANT_CONFIG_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] \
-            || fail "tenant_config_id input is not a UUID"
-          [[ "$DISTR_BASE_URL" == https://* ]] || fail "DISTR_BASE_URL secret is missing or not https"
-          [ -n "$BUILD_TOKEN" ] || fail "STOREAPP_BUILD_CONFIG_TOKEN secret is missing"
-          for s in TENANT_KEYSTORE_BASE64 TENANT_KEYSTORE_PASSWORD TENANT_KEY_ALIAS TENANT_KEY_PASSWORD; do
-            [ -n "${!s:-}" ] || fail "signing secret $s is missing"
-          done
-        env:
-          TENANT_KEYSTORE_BASE64: ${{ secrets.TENANT_KEYSTORE_BASE64 }}
-          TENANT_KEYSTORE_PASSWORD: ${{ secrets.TENANT_KEYSTORE_PASSWORD }}
-          TENANT_KEY_ALIAS: ${{ secrets.TENANT_KEY_ALIAS }}
-          TENANT_KEY_PASSWORD: ${{ secrets.TENANT_KEY_PASSWORD }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Fetch the tenant config from distr
-        run: |
-          set -euo pipefail
-          base="${DISTR_BASE_URL%/}"
-          code=$(curl -sS -o "$RUNNER_TEMP/build-config.json" -w '%{http_code}' --max-time 30 \
-            --retry 3 --retry-delay 5 --retry-connrefused \
-            -H "Authorization: Bearer $BUILD_TOKEN" -H 'Accept: application/json' \
-            "$base/api/public/v1/build-config/$TENANT_CONFIG_ID") || code=000
-          if [ "$code" != 200 ]; then
-            msg="build-config answered HTTP $code (404 = unknown/website/endpoint off, 409 = record not building, 401 = token)"
-            echo "$msg" > "$RUNNER_TEMP/fail_reason"; echo "::error::$msg"; exit 1
-          fi
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Prepare the tenant flavor inputs
-        id: prep
-        run: |
-          set -euo pipefail
-          python -m pip install --quiet pillow
-          if ! python .github/scripts/prepare_tenant_build.py "$RUNNER_TEMP/build-config.json" 2> "$RUNNER_TEMP/prep_err"; then
-            cat "$RUNNER_TEMP/prep_err" > "$RUNNER_TEMP/fail_reason"; cat "$RUNNER_TEMP/prep_err" >&2; exit 1
-          fi
-        env:
-          RUN_NUMBER: ${{ github.run_number }}
-
-      - uses: actions/setup-java@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Build the unsigned tenant release APK
+      - name: Build unsigned tenant bundle
         run: |
-          set -euo pipefail
-          ./gradlew --no-daemon --console=plain :app:assembleTenantRelease \
-            || { echo "Gradle build of the tenant flavor failed" > "$RUNNER_TEMP/fail_reason"; exit 1; }
-          ls app/build/outputs/apk/tenant/release/
+          # Build the AAB bundle instead of the APK. 
+          # No keystore is used here.
+          ./gradlew :app:bundleTenantRelease
+          
+          # Find the generated .aab file
+          find . -name "*.aab" -path "*tenantRelease*" -exec cp {} unsigned.aab \;
+          [[ -f unsigned.aab ]] || { echo "::error::Failed to find unsigned.aab"; exit 1; }
 
-      - name: Align and sign
-        id: sign
-        run: |
-          set -euo pipefail
-          unsigned=$(ls app/build/outputs/apk/tenant/release/*.apk | head -n1)
-          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)"
-          echo "$TENANT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/tenant.jks"
-          out="$RUNNER_TEMP/${TENANT_ID}.apk"
-          "$bt/zipalign" -p -f 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" sign --ks "$RUNNER_TEMP/tenant.jks" --ks-key-alias "$TENANT_KEY_ALIAS" \
-            --ks-pass env:TENANT_KEYSTORE_PASSWORD --key-pass env:TENANT_KEY_PASSWORD \
-            --out "$out" "$RUNNER_TEMP/aligned.apk" \
-            || { echo "apksigner could not sign the APK" > "$RUNNER_TEMP/fail_reason"; exit 1; }
-          "$bt/apksigner" verify "$out"
-          echo "apk=$out" >> "$GITHUB_OUTPUT"
+      - name: Calculate bundle SHA-256
+        id: sha
+        run: echo "sha256=$(sha256sum unsigned.aab | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Upload unsigned bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-bundle
+          path: unsigned.aab
+
+      - name: Trigger Zealot Storage harvest workflow
         env:
-          TENANT_ID: ${{ steps.prep.outputs.tenant_id }}
-          TENANT_KEYSTORE_BASE64: ${{ secrets.TENANT_KEYSTORE_BASE64 }}
-          TENANT_KEYSTORE_PASSWORD: ${{ secrets.TENANT_KEYSTORE_PASSWORD }}
-          TENANT_KEY_ALIAS: ${{ secrets.TENANT_KEY_ALIAS }}
-          TENANT_KEY_PASSWORD: ${{ secrets.TENANT_KEY_PASSWORD }}
-
-      - name: Publish the GitHub Release
-        id: release
+          GH_TOKEN: ${{ secrets.ZEALOT_STORAGE_PAT }}
         run: |
-          set -euo pipefail
-          tag="tenant-${TENANT_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" "$APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Tenant build: ${TENANT_ID}" --latest=false \
-            --notes "Tenant ${TENANT_ID}, application id ${APP_ID}, built by run ${GITHUB_RUN_ID}." \
-            || { echo "gh release create failed" > "$RUNNER_TEMP/fail_reason"; exit 1; }
-          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")
-          echo "release_id=$(jq -er '.id' <<<"$rel")" >> "$GITHUB_OUTPUT"
-          echo "asset_id=$(jq -er '.assets[0].id' <<<"$rel")" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APK: ${{ steps.sign.outputs.apk }}
-          TENANT_ID: ${{ steps.prep.outputs.tenant_id }}
-          APP_ID: ${{ steps.prep.outputs.application_id }}
-
-      - name: Remove the keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/tenant.jks"
-
-      # Runs on success, failure and cancellation, so distr's record never sits in `building` because
-      # of a step failing. Retries 5xx/429 (a 502 means the build was recorded but the mail hand-off
-      # failed; repeating the report is how distr retries it) and stops on any other answer.
-      - name: Report the result to distr
-        if: always()
-        run: |
-          set -uo pipefail
-          [[ "$TENANT_CONFIG_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo "no valid tenant_config_id, nothing to report"; exit 0; }
-          [[ "$DISTR_BASE_URL" == https://* && -n "$BUILD_TOKEN" ]] || { echo "::warning::cannot report, distr secrets missing"; exit 0; }
-          if [ "$JOB_STATUS" = success ] && [ -n "$REL_ID" ] && [ -n "$ASSET_ID" ]; then
-            body=$(jq -n --arg id "$TENANT_CONFIG_ID" --arg repo "$GITHUB_REPOSITORY" \
-              --argjson rel "$REL_ID" --argjson asset "$ASSET_ID" \
-              '{tenant_config_id:$id,status:"succeeded",asset:{repository:$repo,release_id:$rel,asset_id:$asset}}')
-          else
-            reason="Build run did not finish"
-            [ -s "$RUNNER_TEMP/fail_reason" ] && reason=$(head -c 400 "$RUNNER_TEMP/fail_reason")
-            body=$(jq -n --arg id "$TENANT_CONFIG_ID" --arg m "$reason (run $GITHUB_RUN_ID)" \
-              '{tenant_config_id:$id,status:"failed",message:$m}')
-          fi
-          for attempt in 1 2 3 4 5 6; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
-              -H "Authorization: Bearer $BUILD_TOKEN" -H 'Content-Type: application/json' \
-              --data "$body" "${DISTR_BASE_URL%/}/api/public/v1/build-status") || code=000
-            echo "build-status attempt $attempt answered $code"
-            case "$code" in
-              2??) exit 0 ;;
-              000|429|5??) sleep $((attempt * 10)) ;;
-              *) echo "::error::distr refused the report with $code"; exit 1 ;;
-            esac
-          done
-          echo "::error::could not report to distr after 6 attempts"; exit 1
-        env:
-          JOB_STATUS: ${{ job.status }}
-          REL_ID: ${{ steps.release.outputs.release_id }}
-          ASSET_ID: ${{ steps.release.outputs.asset_id }}
+          gh api repos/Zapier-codes/zealot-storage/dispatches \
+            -f event_type=harvest-tenant-apk \
+            -f client_payload[build_id]="${{ inputs.build_id }}" \
+            -f client_payload[storeapp_run_id]="${{ github.run_id }}" \
+            -f client_payload[bundle_sha256]="${{ steps.sha.outputs.sha256 }}"
