@@ -687,3 +687,167 @@ jobs:
               echo "- The name was not sent (repository variable SYNC_APP_NAME is not \`true\`): Zealot keeps its own app name."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Leaf 17c (D-Store `7.a.x.zi`). The committed pictures go to Zealot's replace routes (its Tasks 32 and 33):
+  # PUT /api/apps/:app_id/listing_graphics/feature_graphic (one file) and
+  # PUT /api/apps/:app_id/listing_graphics/screenshots (the whole ordered set in one call, so a re-run neither
+  # duplicates nor reorders). The bytes are sent with fit=false -- they were fitted to Play's rules when they
+  # were committed -- so Zealot judges exactly the committed files and a refusal names the real rule. This job
+  # is idempotent and runs beside `record`, like `listing`: a refused picture turns the run red but never costs
+  # the tag of the uploaded bundle. Only runs when the app has an id (the upload answer carried one).
+  graphics:
+    name: Apply the listing graphics
+    needs: [plan, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Send the feature graphic and the screenshots
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          APP_ID: ${{ needs.publish.outputs.app_id }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+          [[ "${APP_ID:-}" =~ ^[1-9][0-9]{0,17}$ ]] \
+            || fail "no app id came out of the upload step (see its warning), so the graphics were not sent; the bundle is uploaded and held. By hand: PUT /api/apps/<app id>/listing_graphics/screenshots (docs/RELEASING.md)"
+
+          hdr="$RUNNER_TEMP/zealot-auth.hdr"
+          trap 'rm -f "$hdr"' EXIT
+          (umask 077; printf 'Authorization: Bearer %s\n' "$ZEALOT_APP_TOKEN" > "$hdr")
+          base="${ZEALOT_URL%/}/api/apps/$APP_ID/listing_graphics"
+
+          # api PUT <out> [curl args...] prints the HTTP status. No retry: a PUT that reached Zealot has
+          # already replaced the set, and the routes are idempotent anyway.
+          api_put() {
+            local out="$1"; shift
+            curl -sS -o "$out" -w '%{http_code}' --max-time 300 -X PUT -H "@$hdr" -H 'Accept: application/json' "$@"
+          }
+          show() { head -c 1200 "$1" || true; echo; }
+
+          # 1. Feature graphic, when one is committed (the build only warns when it is absent).
+          shopt -s nullglob
+          features=(listing/feature-graphic.*)
+          if [ "${#features[@]}" -gt 1 ]; then
+            fail "more than one listing/feature-graphic.* file"
+          fi
+          if [ "${#features[@]}" -eq 1 ]; then
+            status=$(api_put "$RUNNER_TEMP/fg.json" -F "fit=false" -F "file=@${features[0]}" "$base/feature_graphic") \
+              || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+            if [ "$status" != "200" ]; then
+              show "$RUNNER_TEMP/fg.json"
+              fail "Zealot answered $status to the feature graphic (200 expected; 422 = it refused the picture)"
+            fi
+            echo "feature graphic: replaced $(jq -r '.replaced // "?"' "$RUNNER_TEMP/fg.json")"
+          else
+            echo "::notice::no listing/feature-graphic.* committed; the feature graphic was not sent"
+          fi
+
+          # 2. Screenshots: the whole ordered set in one call. build_listing.py already refuses fewer than
+          #    two, so a release run always has a set; guard here too so the job is safe on its own.
+          shots=(listing/screenshots/*)
+          files=()
+          for shot in "${shots[@]}"; do
+            [ -f "$shot" ] || continue
+            files+=(-F "files[]=@$shot")
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            fail "no listing/screenshots/* files to send (build_listing.py should have refused this)"
+          fi
+          status=$(api_put "$RUNNER_TEMP/shots.json" -F "fit=false" "${files[@]}" "$base/screenshots") \
+            || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            show "$RUNNER_TEMP/shots.json"
+            fail "Zealot answered $status to the screenshots (200 expected; 422 = it refused a picture)"
+          fi
+
+          {
+            echo "### Listing graphics"
+            echo ""
+            echo "- App id: \`$APP_ID\`"
+            echo "- Feature graphic sent: $([ "${#features[@]}" -eq 1 ] && echo yes || echo no)"
+            echo "- Screenshots replaced: $(jq -r '.replaced // "?"' "$RUNNER_TEMP/shots.json")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Leaf 17d (D-Store `7.a.x.zo`). Wait for Zealot to finish the compile, then release the held upload.
+  # GET /api/releases/:release_id (Zealot's Task 31) is polled until `asset_delivery_state` is `done`; a
+  # `failed` or `skipped` state fails the run and leaves the release held. On `done`, POST
+  # /api/releases/:release_id/release (34a-6) makes it available. No hold-for-approval step (operator,
+  # 2026-10-03). Runs only when a bundle was actually uploaded (`publish` succeeded).
+  release:
+    name: Wait for the compile, then release
+    needs: [plan, publish]
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Poll for the compile, then release
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          RELEASE_ID: ${{ needs.publish.outputs.release_id }}
+          VERSION: ${{ needs.plan.outputs.name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+          [[ "${RELEASE_ID:-}" =~ ^[1-9][0-9]{0,17}$ ]] || fail "no release id came out of the upload step"
+
+          hdr="$RUNNER_TEMP/zealot-auth.hdr"
+          trap 'rm -f "$hdr"' EXIT
+          (umask 077; printf 'Authorization: Bearer %s\n' "$ZEALOT_APP_TOKEN" > "$hdr")
+          url="${ZEALOT_URL%/}/api/releases/$RELEASE_ID"
+          show() { head -c 1200 "$1" || true; echo; }
+
+          # Wait up to 45 minutes; a CI compile can take about 30. 20 seconds between polls.
+          deadline=$(( $(date +%s) + 2700 ))
+          state=""
+          while :; do
+            status=$(curl -sS -o "$RUNNER_TEMP/release.json" -w '%{http_code}' --max-time 60 \
+              -H "@$hdr" -H 'Accept: application/json' "$url") || status=000
+            if [ "$status" = "200" ]; then
+              state=$(jq -r '.asset_delivery_state // ""' "$RUNNER_TEMP/release.json")
+              case "$state" in
+                done) break ;;
+                failed|skipped)
+                  show "$RUNNER_TEMP/release.json"
+                  fail "Zealot ended the compile as $state ($(jq -r '.asset_delivery_error // "no reason given"' "$RUNNER_TEMP/release.json")); the release stays held"
+                  ;;
+              esac
+            elif [ "$status" != "000" ] && [ "$status" != "429" ] && [ "${status:0:1}" != "5" ]; then
+              show "$RUNNER_TEMP/release.json"
+              fail "Zealot answered $status while reading the release (200 expected; 401/403 = bad token, 404 = unknown release)"
+            fi
+            [ "$(date +%s)" -lt "$deadline" ] \
+              || fail "Zealot had not finished the compile after 45 minutes (last state: ${state:-unknown}); the release stays held, check its page"
+            sleep 20
+          done
+
+          # The compile is done; make the release available. A second call on an already-available release is
+          # a 422 ("only a held release can be released this way") -- treat that as success, since the wanted
+          # end state is reached.
+          status=$(curl -sS -o "$RUNNER_TEMP/release_post.json" -w '%{http_code}' --max-time 60 \
+            -X POST -H "@$hdr" -H 'Accept: application/json' "$url/release") || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            if [ "$status" = "422" ] && [ "$(jq -r '.status // ""' "$RUNNER_TEMP/release.json")" = "available" ]; then
+              echo "::notice::release $RELEASE_ID was already available"
+            else
+              show "$RUNNER_TEMP/release_post.json"
+              fail "Zealot answered $status to the release (200 expected)"
+            fi
+          fi
+
+          {
+            echo "### Released"
+            echo ""
+            echo "- Release id: \`$RELEASE_ID\`, version \`$VERSION\`"
+            echo "- Compile state: \`done\`; the release is now **available** and appears in the catalog."
+          } >> "$GITHUB_STEP_SUMMARY"

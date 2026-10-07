@@ -12,6 +12,8 @@ The workflow is `.github/workflows/release-aab.yml`; this page is the operator's
 | **publish** | Uploads the bundle to Zealot with the per-app token, **held** (`hold=true`); expects `201` | any other answer |
 | **record** | Creates tag `vX.Y.Z` and a GitHub Release with the bundle attached. The only job that can write to the repository | the release already exists |
 | **listing** | Beside **record**: sends the listing text (`short_description`, `description`; the name only if `SYNC_APP_NAME` is `true`) from the build's `listing.json` to Zealot's draft (`PATCH /api/apps/<app id>/listing_edit`), then publishes it (`POST .../commit`). The app id comes from the upload's answer | Zealot refuses the text, a draft with other unpublished edits already exists, or the upload's answer had no app id |
+| **graphics** | Beside **record**: sends the committed pictures to Zealot's replace routes (`PUT /api/apps/<app id>/listing_graphics/feature_graphic` and `.../screenshots`, `fit=false`). Idempotent: a re-run neither duplicates nor reorders | Zealot refuses a picture, or the upload's answer had no app id |
+| **release** | Waits for Zealot's compile (polls `GET /api/releases/<release id>` until `asset_delivery_state` is `done`), then releases the held upload (`POST /api/releases/<release id>/release`). A `failed` or `skipped` compile fails the run and leaves the release held | the compile fails or is skipped, or it has not finished within 45 minutes |
 
 "Built from" means `app/` (except `app/src/test` and `app/src/androidTest`), `build.gradle.kts`,
 `settings.gradle.kts`, `gradle.properties`, `gradle/`, `gradlew`, `gradlew.bat` and `version.properties`.
@@ -48,19 +50,18 @@ gh workflow run release-aab.yml -R Zapier-codes/Storeapp                        
 gh workflow run release-aab.yml -R Zapier-codes/Storeapp -f dry_run=false         # upload from main
 ```
 
-## A release is held until you release it
+## A release is held until the compile finishes
 
 The upload creates the release **held**: it is not in the catalog index. Zealot compiles and signs the APKs
-afterwards; check the release page shows them (and `signed`) before releasing. Then, with the release id from
-the run summary and the app token:
+afterwards. The **release** job waits for that compile (`asset_delivery_state` becomes `done`), then releases
+the upload automatically; a `failed` or `skipped` compile fails the run and leaves the release held.
+
+To release by hand instead (with the release id from the run summary and the app token):
 
 ```
 curl -X POST -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
   https://zealot-deploy-latest.onrender.com/api/releases/<release id>/release
 ```
-
-Releasing automatically, after waiting for the compile, is leaf `7.a.x.zo`; it needs Zealot to report the
-compile state first (Zealot leaves 30 and 31).
 
 ## The listing text
 
@@ -86,7 +87,27 @@ curl -X POST -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
   https://zealot-deploy-latest.onrender.com/api/apps/<app id>/listing_edit/commit
 ```
 
-The feature graphic and screenshots are not sent yet (leaves `7.a.x.zi` and Zealot 32 and 33).
+The **graphics** job sends the committed pictures (leaves `7.a.x.zi` and Zealot 32 and 33) through the same
+replace routes, with `fit=false` so Zealot judges exactly the committed files.
+
+## The listing graphics
+
+The committed `listing/` pictures go to Zealot through its replace routes, so a re-run is idempotent:
+
+- `PUT /api/apps/<app id>/listing_graphics/feature_graphic` sends `listing/feature-graphic.*` (when committed).
+- `PUT /api/apps/<app id>/listing_graphics/screenshots` sends the whole ordered set from
+  `listing/screenshots/*` in file-name order, replacing what is there. It neither duplicates nor reorders.
+
+Both are sent with `fit=false`: the files were fitted to Play's rules when they were committed, and a refusal
+names the real rule. The job runs beside **record**, so a refused picture turns the run red but the bundle
+stays uploaded and tagged. By hand, with the app id and the app token:
+
+```
+curl -X PUT -H "Authorization: Bearer $(cat ~/storeapp-zealot.token)" \
+  -F 'fit=false' -F 'files[]=@listing/screenshots/01-home.png' \
+  -F 'files[]=@listing/screenshots/02-search.png' \
+  https://zealot-deploy-latest.onrender.com/api/apps/<app id>/listing_graphics/screenshots
+```
 
 ## Direct upload (optional, off by default)
 
