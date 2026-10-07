@@ -1,5 +1,6 @@
-# Zealot Task 43d-2: puts the committed store-listing screenshots (listing/screenshots/) on Appstore's listing in
-# Zealot, over the API, so the signed index carries them and D-Store can show them.
+# Zealot Tasks 43d-2 and 43d-4: puts the committed store-listing screenshots (listing/screenshots/) and the store
+# icon (listing/icon.png, 512 x 512) on Appstore's listing in Zealot, over the API, so the signed index carries
+# them and D-Store can show them.
 #
 # A standalone workflow on purpose (Zealot decision D43-3): release-aab.yml's `paths` filter ignores `listing/`
 # so a picture change never starts a release, and this one never starts a build.
@@ -12,6 +13,12 @@
 # judges the committed bytes exactly as they are and a 422 shows the real rule (the pictures are committed
 # already fitted to 2:1; Zealot's own fitting would hide a bad commit).
 #
+# The icon (43d-4) goes up with PUT /api/apps/<id>/listing_icon (Zealot 43f-3), onto the app's newest published
+# release, with fit=false so Zealot judges the committed 512 x 512 PNG as it is. On a push it is sent only when
+# that push changed listing/icon.png; by hand (Run workflow) it is always sent. It is a separate step, so the
+# screenshots step stopping at "already has 2" does not skip it. Zealot answers 422 "no published release" until
+# a release exists.
+#
 # Needs: secret ZEALOT_APP_TOKEN and variable ZEALOT_URL (both already used by release-aab.yml) and the NEW
 # repository variable ZEALOT_APP_ID (Appstore is app 2 on the live Zealot). Run by hand: Actions -> Listing
 # graphics -> Run workflow.
@@ -22,6 +29,7 @@ on:
     branches: [main]
     paths:
       - "listing/screenshots/**"
+      - "listing/icon.png"
       - ".github/workflows/listing-graphics.yml"
   workflow_dispatch:
 
@@ -39,6 +47,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 2
 
       - name: Upload the screenshots Zealot does not have yet
         env:
@@ -98,3 +108,36 @@ jobs:
           done
 
           echo "::notice::Uploaded ${#files[@]} screenshot(s). The index republishes by itself; D-Store re-reads it within 5 minutes."
+
+      - name: Set the store icon
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_APP_ID: ${{ vars.ZEALOT_APP_ID }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          fail() { echo "::error::$*"; exit 1; }
+
+          [ -f listing/icon.png ] || { echo "::notice::no listing/icon.png; icon step skipped"; exit 0; }
+          if [ "$EVENT" = "push" ] && git diff --quiet HEAD^ HEAD -- listing/icon.png 2>/dev/null; then
+            echo "::notice::listing/icon.png did not change in this push; icon step skipped (run by hand to send it again)"
+            exit 0
+          fi
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_APP_ID:-}" ] || fail "repository variable ZEALOT_APP_ID is not set (Appstore is app 2)"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+          case "$ZEALOT_APP_ID" in *[!0-9]*|'') fail "ZEALOT_APP_ID must be a number, got '$ZEALOT_APP_ID'" ;; esac
+
+          status=$(curl -sS -X PUT -o "$RUNNER_TEMP/icon.json" -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${ZEALOT_APP_TOKEN}" -F fit=false -F "file=@listing/icon.png" \
+            "${ZEALOT_URL%/}/api/apps/${ZEALOT_APP_ID}/listing_icon") || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            fail "Zealot refused the icon with $status (404 means Zealot has not deployed Task 43f-3; 422 says why): $(head -c 500 "$RUNNER_TEMP/icon.json")"
+          fi
+          {
+            echo "### Icon set"
+            echo ""
+            jq -r '"Release \(.icon.release_id) (\(.icon.version_name)), sha256 `\(.icon.sha256)`"' "$RUNNER_TEMP/icon.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::Icon set. The index republishes by itself; D-Store re-reads it within 5 minutes."

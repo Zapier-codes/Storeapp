@@ -50,6 +50,7 @@ CATEGORIES = {
 GRAPHIC_MAX_BYTES = 8 * 1024 * 1024
 MIN_SIDE, MAX_SIDE, MAX_ASPECT = 320, 3840, 2
 MAX_SCREENSHOTS = 8
+MIN_SCREENSHOTS = 2  # Task 43d-3: Zealot's own "complete" rule (ListingGraphicChecklist::MIN_SCREENSHOTS)
 FEATURE_SIZE = (1024, 500)
 FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg"}
 
@@ -197,8 +198,8 @@ def listing_folder(folder):
     shots = sorted(p for p in shots_dir.glob("*") if p.is_file() and p.name != ".gitkeep") if shots_dir.is_dir() else []
     if len(shots) > MAX_SCREENSHOTS:
         die(f"{len(shots)} screenshots in {shots_dir} (at most {MAX_SCREENSHOTS})")
-    if not shots:
-        warn("no screenshots in listing/screenshots/; the listing goes out without any")
+    if len(shots) < MIN_SCREENSHOTS:
+        die(f"{len(shots)} screenshot(s) in {shots_dir}; the listing needs at least {MIN_SCREENSHOTS} (Zealot Task 43d-3)")
     screenshots = []
     for i, p in enumerate(shots):
         g = graphic(p, "screenshot")

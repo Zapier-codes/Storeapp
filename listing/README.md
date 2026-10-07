@@ -14,5 +14,7 @@ here: they come from the bundle.
 | `screenshots/` | Phone screenshots, shown in file-name order (`01-home.png`, `02-detail.png`, ...) | up to 8; PNG or JPEG, no transparency, not animated, 8 MB at most, each side 320 to 3840 px, long side at most twice the short side |
 | `feature-graphic.png` | The banner | PNG or JPEG, no transparency, exactly 1024 x 500 |
 
-Screenshots and the feature graphic are **not committed yet**: they have to be captured from a running
-build, and none has been. The build warns and goes on without them; Zealot does not require them.
+Screenshots are committed (four, `01-home.png` to `04-settings.png`, already cropped to 2:1) and the build
+**fails** with fewer than 2 (Zealot Task 43d-3). `icon.png` is the 512 x 512 store icon, composed from the
+launcher's adaptive layers; both are sent to Zealot by `.github/workflows/listing-graphics.yml`, not by a release.
+The feature graphic is **not committed yet**; the build goes on without it.
