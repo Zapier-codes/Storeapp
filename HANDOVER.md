@@ -267,6 +267,14 @@ instead of `git format-patch` + `git am`, and apply/push commands with no
 concrete paths in them). Read this section itself from now on; don't defer to
 D-Store's copy for the mechanics.
 
+**Cross-repo sessions (operator's instruction, 2026-10-07; supersedes the per-repo apply commands below whenever a session
+changes more than one repo).** The session hands over **one uniquely named file, `apply-all-<stamp>-<slug>.sh`**, built by D-Store's
+`scripts/make-apply-all.sh` (one squashed commit per repo, `git format-patch -1 HEAD --binary --stdout`, Zealot first,
+Storeapp's branch is `main`). The operator runs `bash ~/storage/downloads/<the exact file name the session gives>` (`--check` for a dry run; the name is new every delivery, never the bare `apply-all.sh`). It
+checks every repo first, applies and pushes each, never forces, and rolls back a failed `git am`. The full rule is in
+D-Store's `HANDOVER.md`, "Cross-repo delivery". The steps below still describe a Storeapp-only session and the content
+of each commit.
+
 0. **Check upstream first:** `git fetch origin` and compare against
    `origin/main`. If origin has moved since the local clone/session was last
    synced, `git rebase origin/main` before starting the leaf and before
