@@ -1,0 +1,100 @@
+# Zealot Task 43d-2: puts the committed store-listing screenshots (listing/screenshots/) on Appstore's listing in
+# Zealot, over the API, so the signed index carries them and D-Store can show them.
+#
+# A standalone workflow on purpose (Zealot decision D43-3): release-aab.yml's `paths` filter ignores `listing/`
+# so a picture change never starts a release, and this one never starts a build.
+#
+# Idempotent: it uploads only when the app has fewer than 2 screenshots on Zealot (the rule the Zealot console
+# and D-Store use as "complete"). A second run stops green with a notice. To replace a picture, delete it by hand
+# (DELETE /api/apps/<id>/listing_graphics/<graphic id>) and run this again.
+#
+# Files go up in name order (01-..., 02-...), kind=screenshot, alt text from the file name, fit=false so Zealot
+# judges the committed bytes exactly as they are and a 422 shows the real rule (the pictures are committed
+# already fitted to 2:1; Zealot's own fitting would hide a bad commit).
+#
+# Needs: secret ZEALOT_APP_TOKEN and variable ZEALOT_URL (both already used by release-aab.yml) and the NEW
+# repository variable ZEALOT_APP_ID (Appstore is app 2 on the live Zealot). Run by hand: Actions -> Listing
+# graphics -> Run workflow.
+name: Listing graphics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "listing/screenshots/**"
+      - ".github/workflows/listing-graphics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: listing-graphics
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload screenshots to Zealot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Upload the screenshots Zealot does not have yet
+        env:
+          ZEALOT_URL: ${{ vars.ZEALOT_URL }}
+          ZEALOT_APP_ID: ${{ vars.ZEALOT_APP_ID }}
+          ZEALOT_APP_TOKEN: ${{ secrets.ZEALOT_APP_TOKEN }}
+        run: |
+          set -u
+          fail() { echo "::error::$*"; exit 1; }
+
+          [ -n "${ZEALOT_URL:-}" ] || fail "repository variable ZEALOT_URL is not set"
+          [ -n "${ZEALOT_APP_ID:-}" ] || fail "repository variable ZEALOT_APP_ID is not set (Appstore is app 2)"
+          [ -n "${ZEALOT_APP_TOKEN:-}" ] || fail "repository secret ZEALOT_APP_TOKEN is not set"
+          case "$ZEALOT_APP_ID" in *[!0-9]*|'') fail "ZEALOT_APP_ID must be a number, got '$ZEALOT_APP_ID'" ;; esac
+
+          base="${ZEALOT_URL%/}/api/apps/${ZEALOT_APP_ID}/listing_graphics"
+
+          shopt -s nullglob
+          files=(listing/screenshots/*.png listing/screenshots/*.jpg listing/screenshots/*.jpeg)
+          [ "${#files[@]}" -gt 0 ] || fail "no screenshots in listing/screenshots/"
+          IFS=$'\n' files=($(printf '%s\n' "${files[@]}" | sort)); unset IFS
+
+          status=$(curl -sS -o "$RUNNER_TEMP/list.json" -w '%{http_code}' --max-time 60 \
+            -H "Authorization: Bearer ${ZEALOT_APP_TOKEN}" "$base") || fail "could not reach Zealot at ${ZEALOT_URL%/}"
+          if [ "$status" != "200" ]; then
+            fail "listing graphics read answered $status (401 bad token, 403 token is for another app, 404 wrong ZEALOT_APP_ID or Zealot has not deployed Task 43a): $(head -c 300 "$RUNNER_TEMP/list.json")"
+          fi
+          have=$(jq -r '.screenshots_count // 0' "$RUNNER_TEMP/list.json")
+          max=$(jq -r '.screenshots_max // 8' "$RUNNER_TEMP/list.json")
+          echo "Zealot already holds $have screenshot(s) for app ${ZEALOT_APP_ID} (limit $max)."
+
+          if [ "$have" -ge 2 ]; then
+            echo "::notice::Zealot already has $have screenshots; nothing uploaded. To replace one, delete it by hand (DELETE .../listing_graphics/<id>) and run this again."
+            exit 0
+          fi
+          [ $(( have + ${#files[@]} )) -le "$max" ] || fail "${#files[@]} files plus $have already on Zealot is over the limit of $max"
+
+          {
+            echo "### Screenshots uploaded"
+            echo ""
+            echo "| File | Graphic id | Size | Fitted by Zealot |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for f in "${files[@]}"; do
+            name=$(basename "$f"); alt="${name%.*}"; alt="${alt#[0-9][0-9]-}"; alt="${alt//[-_]/ }"
+            status=$(curl -sS -o "$RUNNER_TEMP/up.json" -w '%{http_code}' --max-time 120 \
+              -H "Authorization: Bearer ${ZEALOT_APP_TOKEN}" \
+              -F kind=screenshot -F "alt_text=${alt}" -F fit=false -F "file=@${f}" "$base") \
+              || fail "upload of $name could not reach Zealot"
+            if [ "$status" != "201" ]; then
+              fail "Zealot refused $name with $status: $(head -c 500 "$RUNNER_TEMP/up.json")"
+            fi
+            echo "uploaded $name"
+            jq -r --arg n "$name" '"| \($n) | \(.graphic.id) | \(.graphic.width) x \(.graphic.height) | \(.fitted) |"' \
+              "$RUNNER_TEMP/up.json" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          echo "::notice::Uploaded ${#files[@]} screenshot(s). The index republishes by itself; D-Store re-reads it within 5 minutes."
