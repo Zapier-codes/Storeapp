@@ -31,6 +31,30 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link from D-Store's "Open" button. Chrome only launches an app from an
+                 intent: link when an activity declares BROWSABLE; the launcher filter above
+                 does not, so Open fell back to re-downloading an installed app. No data on
+                 purpose: the link is intent:#Intent;package=<id>;S.browser_fallback_url=...;end -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+            </intent-filter>
+        </activity>
+
+        <!-- D-Store's Uninstall link: vyxelapps://uninstall/<package> opens Android's uninstall confirmation. -->
+        <activity
+            android:name=".LinkActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vyxelapps" android:host="uninstall" />
+            </intent-filter>
         </activity>
 
         <!-- Required for installing APKs -->

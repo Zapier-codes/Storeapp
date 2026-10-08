@@ -266,6 +266,29 @@ presigned URL. **Needs Zealot first:** the staging bucket, `RELEASE_UPLOAD_SESSI
 (Zealot 40i-a/c, patch pending at the time of writing) and the new `GET` door; apply the Zealot patch before turning
 the variable on. Docs: `docs/RELEASING.md`, "Direct upload".
 
+### Operator-directed change, no leaf: D-Store's "Open" deep link (2026-10-08)
+
+D-Store's Open button is an Android `intent:` link (`intent:#Intent;package=com.vythera.vyxelapps;S.browser_fallback_url=...;end`).
+Chrome only launches an app from such a link when an activity declares the BROWSABLE category (Chrome's own Android
+intents documentation), and `MainActivity` had only MAIN/LAUNCHER, so Open always took the fallback and downloaded an
+installed Appstore again. `AndroidManifest.xml` now gives `MainActivity` a second intent filter: action VIEW, categories
+DEFAULT and BROWSABLE, no data (the link carries none). The tenant flavours share this manifest, so they get it too.
+**Not run:** no Android SDK in the sandbox. **Takes effect only after Appstore is updated to the build that has it;** an
+older installed copy still lacks the filter, so Open on that copy falls back to the download (which is the update).
+**Operator, one device test after installing the new build:** open an Appstore page on d-store-nu.vercel.app in Chrome
+and tap Open (should open the app), then uninstall Appstore, reload, tap Open (should land back on the page and download).
+
+### Operator-directed change, no leaf: D-Store's "Uninstall" deep link (2026-10-08)
+
+A web page cannot uninstall an app, and Chrome will not hand a `package:` uninstall intent to Android's installer (that
+activity is not BROWSABLE). So the link goes through Storeapp: new `LinkActivity` (no screen, `Theme.NoDisplay`) answers
+`vyxelapps://uninstall/<package>` (BROWSABLE, scheme `vyxelapps`, host `uninstall`), checks the package name is well
+formed and installed, and opens Android's own uninstall confirmation (`ACTION_DELETE`, `package:<pkg>`). **The person
+still taps OK in the system dialog; nothing is removed silently.** Any installed package can be named by a link (the
+dialog is the guard); the app does not restrict it to apps this store installed, because the D-Store flow installs
+through the browser, so the installer is not Storeapp. If Storeapp is not installed the browser falls back to the app's
+page. **Not run:** no Android SDK in the sandbox, so not even a Kotlin compile. Takes effect on the next Appstore build.
+
 ### Operator-directed change, no leaf: Storeapp reads the signed index from the Zealot host (2026-10-08)
 
 `ZealotClient.baseUrl` was `""` and nothing in the app ever set it, so the Zealot source never fetched anything. It now
