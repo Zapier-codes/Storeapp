@@ -266,6 +266,19 @@ presigned URL. **Needs Zealot first:** the staging bucket, `RELEASE_UPLOAD_SESSI
 (Zealot 40i-a/c, patch pending at the time of writing) and the new `GET` door; apply the Zealot patch before turning
 the variable on. Docs: `docs/RELEASING.md`, "Direct upload".
 
+### Operator-directed change, no leaf: Storeapp reads the signed index from the Zealot host (2026-10-08)
+
+`ZealotClient.baseUrl` was `""` and nothing in the app ever set it, so the Zealot source never fetched anything. It now
+starts as `BuildConfig.ZEALOT_CATALOG_URL`, a new field in `app/build.gradle.kts` whose default is
+`https://zealot-deploy-latest.onrender.com/catalog` (Zealot Task 45g; the app adds `/index.json` and `/index.json.sig`).
+The URL is public, so it is committed as the default; `-PzealotCatalogUrl=<url>` overrides it, and a blank property
+falls back to the default (same `prop()` helper as `DSTORE_CATALOG_URL`). Checked against the live host on 2026-10-08:
+`/catalog/index.json` and `.sig` both answer 200. **Not run:** no Android SDK in the sandbox, so not even a Kotlin compile.
+**Two things to watch on a first real install:** (1) Render Free sleeps and the client's connect and read timeouts are
+15 seconds, so the very first fetch after a sleep can time out and the app falls back to nothing (a fresh install has no
+last-good copy); a later fetch succeeds. Raising the timeouts is a separate decision. (2) The index must verify against
+`PINNED_KEYS` (`ZealotTrust.kt`); if Zealot signs with a different key, the app silently shows no Zealot apps.
+
 ## 3. Handoff process
 
 Same as D-Store's — but inlined here in full, not just referenced, because a

@@ -78,6 +78,10 @@ android {
         buildConfigField("String", "PUSH_REGISTRATION_URL", "\"${prop("pushRegistrationUrl")}\"")
         // 7.b.iv.zi: D-Store catalog API base URL (e.g. https://<deployment>), blank = D-Store browse is empty. Gradle property dstoreCatalogUrl, never committed.
         buildConfigField("String", "DSTORE_CATALOG_URL", "\"${prop("dstoreCatalogUrl")}\"")
+        // 1.a.i.zo: Zealot's signed catalog index, served from its Render host (Zealot Task 45g). The app adds
+        // /index.json and /index.json.sig. A public URL, not a secret, so it is the default; -PzealotCatalogUrl
+        // overrides it (a blank property falls back to the default).
+        buildConfigField("String", "ZEALOT_CATALOG_URL", "\"${prop("zealotCatalogUrl").ifBlank { "https://zealot-deploy-latest.onrender.com/catalog" }}\"")
     }
 
     // Packaging-identity-only product flavors -- leaf `1.c.i.zo`. One flavor per distributable

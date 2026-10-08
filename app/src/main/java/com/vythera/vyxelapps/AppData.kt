@@ -668,7 +668,7 @@ object IzzyOnDroidClient {
 // "no live source configured yet," the same honest empty-result fallback `zealot.ts`
 // itself uses — not an error, and never silently falls back to some other source.
 object ZealotClient {
-    @Volatile var baseUrl: String = ""
+    @Volatile var baseUrl: String = BuildConfig.ZEALOT_CATALOG_URL
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
