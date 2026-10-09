@@ -7,6 +7,9 @@
     <!-- h.ii.zi: the self-update download runs as a foreground dataSync service (required from targetSdk 34). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- h.iii.zi: lets a later update of the store install without Android's confirmation screen (API 31+, only when
+         Android allows it); the first update on a device and Android 8 to 11 still ask. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -79,6 +82,12 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- h.iii.zi: result of the store's own PackageInstaller session (SelfInstaller). Not exported: only the system
+             delivers to it, through the PendingIntent the session was committed with. -->
+        <receiver
+            android:name=".SelfUpdateReceiver"
+            android:exported="false" />
 
         <!-- h.ii.zi: WorkManager's own foreground service, given the dataSync type the permission above is for. -->
         <service

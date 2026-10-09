@@ -169,6 +169,32 @@ object Verifier {
         }
     }
 
+    /** h.iii.zi: [signingCertSha256Fingerprints] for callers outside this object (the self-installer). Null when unreadable. */
+    fun apkSigningFingerprints(ctx: Context, apkFile: File): List<String>? =
+        try { signingCertSha256Fingerprints(ctx, apkFile) } catch (_: Exception) { null }
+
+    /**
+     * h.iii.zi: SHA-256 fingerprints of the signing certificates of the app that is installed right now (this
+     * store). Same API split as [signingCertSha256Fingerprints] (`GET_SIGNING_CERTIFICATES` from API 28, the
+     * deprecated `GET_SIGNATURES` below). Null when they cannot be read.
+     */
+    fun installedSigningFingerprints(ctx: Context): List<String>? = try {
+        val pm = ctx.packageManager
+        val signatures: Array<android.content.pm.Signature>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNATURES).signatures
+        }
+        if (signatures == null || signatures.isEmpty()) null else {
+            val digest = MessageDigest.getInstance("SHA-256")
+            signatures.map { signature ->
+                digest.reset()
+                digest.digest(signature.toByteArray()).joinToString(separator = "") { "%02x".format(it) }
+            }
+        }
+    } catch (_: Exception) { null }
+
     /** Claims arrive in whatever case/separator convention the source used (colon-separated,
      *  `sha256:`-prefixed, uppercase, ...) — normalize both sides to bare lowercase hex before
      *  comparing so a formatting difference is never mistaken for a real mismatch. */
