@@ -1,6 +1,8 @@
 package com.vythera.vyxelapps
 
 import android.os.Build
+import com.vythera.vyxelapps.api.SelfUpdateBanner
+import com.vythera.vyxelapps.api.SelfUpdateBannerState
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.animation.slideOutHorizontally
@@ -510,6 +512,11 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
 
                     // ── Self-update banner ─────────────────────────────
                     val selfUpdate = state.selfUpdateInfo
+                    // h.ii.zo: what the banner says comes from the pure SelfUpdateBanner.stateFor (unit-tested).
+                    val selfDownload = SelfUpdateDownloads.state.collectAsState().value
+                    val banner = selfUpdate?.let {
+                        SelfUpdateBanner.stateFor(it.latestVersion, it.versionCode, it.changelog, selfDownload, state.selfUpdatePhase)
+                    }
                     if (selfUpdate != null && !state.selfUpdateDismissed) {
                         Box(
                             modifier = Modifier
@@ -531,30 +538,45 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
+                                        val (title, subtitle) = when (val b = banner) {
+                                            is SelfUpdateBannerState.Available      -> "Update available: ${b.versionName}" to b.changelogLine
+                                            is SelfUpdateBannerState.Downloading    -> "Downloading update ${b.versionName}" to "${b.percent}%"
+                                            is SelfUpdateBannerState.Verifying      -> "Checking update ${b.versionName}" to "Verifying checksum and signature"
+                                            is SelfUpdateBannerState.ReadyToInstall -> "Update ${b.versionName} is ready" to "Tap Install to update the store"
+                                            is SelfUpdateBannerState.Failed         -> "Update failed" to b.reason
+                                            null                                    -> "" to null
+                                        }
                                         Text(
-                                            "Update available: ${selfUpdate.latestVersion}",
+                                            title,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             style = MaterialTheme.typography.labelLarge
                                         )
-                                        if (selfUpdate.changelog.isNotBlank()) {
+                                        if (!subtitle.isNullOrBlank()) {
                                             Text(
-                                                selfUpdate.changelog.lines().firstOrNull()?.take(60) ?: "",
+                                                subtitle,
                                                 color    = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                                 style    = MaterialTheme.typography.labelSmall,
-                                                maxLines = 1
+                                                maxLines = 2
                                             )
+                                        }
+                                        when (val b = banner) {
+                                            is SelfUpdateBannerState.Downloading -> LinearProgressIndicator(
+                                                progress = { b.percent / 100f },
+                                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                                            )
+                                            is SelfUpdateBannerState.Verifying -> LinearProgressIndicator(
+                                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                                            )
+                                            else -> Unit
                                         }
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    FilledTonalButton(onClick = {
-                                        val intent = android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(selfUpdate.apkUrl)
-                                        )
-                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(intent)
-                                    }) {
-                                        Text("Update")
+                                    when (banner) {
+                                        is SelfUpdateBannerState.Available      -> FilledTonalButton(onClick = { viewModel.startSelfUpdate() }) { Text("Update") }
+                                        is SelfUpdateBannerState.Downloading    -> TextButton(onClick = { viewModel.cancelSelfUpdate() }) { Text("Cancel") }
+                                        is SelfUpdateBannerState.ReadyToInstall -> FilledTonalButton(onClick = { viewModel.installSelfUpdate() }) { Text("Install") }
+                                        is SelfUpdateBannerState.Failed         -> FilledTonalButton(onClick = { viewModel.startSelfUpdate() }) { Text("Retry") }
+                                        is SelfUpdateBannerState.Verifying, null -> Unit
                                     }
                                     IconButton(onClick = { viewModel.dismissSelfUpdate() }) {
                                         Icon(Icons.Rounded.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onPrimaryContainer)

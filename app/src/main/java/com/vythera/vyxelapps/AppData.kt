@@ -24,6 +24,7 @@ import com.google.gson.JsonArray
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -283,6 +284,8 @@ data class UiState(
     val zealotApps          : List<GitHubRepo>        = emptyList(),
     val selfUpdateInfo      : SelfUpdateInfo?         = null,
     val selfUpdateDismissed : Boolean                 = false,
+    // h.ii.zo: where the downloaded update is in the checksum and signer checks (api/SelfUpdateBanner.kt).
+    val selfUpdatePhase     : com.vythera.vyxelapps.api.SelfUpdateCheckPhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.None,
 )
 
 interface GTranslateService {
@@ -2704,5 +2707,81 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissSelfUpdate() {
         state = state.copy(selfUpdateDismissed = true)
+    }
+
+    // ---- h.ii.zo: the banner's actions. Update starts the in-app download (SelfUpdateDownloads); when the file is
+    // accepted (exact size) it is checked against the index's sha256 and signing_fingerprint with Verifier; only a
+    // file that passes BOTH is "Ready to install". Install then goes through InstallGateway, which checks again
+    // right before Android's installer opens (h.iii replaces that last step with a PackageInstaller session).
+    private var selfUpdateWatch: kotlinx.coroutines.Job? = null
+
+    private fun SelfUpdateInfo.toOffer() = com.vythera.vyxelapps.api.SelfUpdateOffer(
+        versionName        = latestVersion,
+        versionCode        = versionCode,
+        downloadUrl        = apkUrl,
+        sha256             = sha256,
+        sizeBytes          = sizeBytes,
+        signingFingerprint = signingFingerprint,
+        minSdk             = null,
+        changelog          = changelog.ifBlank { null }
+    )
+
+    /** Update and Retry both call this; a retry resumes from the part-file when one is left. */
+    fun startSelfUpdate() {
+        val info = state.selfUpdateInfo ?: return
+        selfUpdateWatch?.cancel()
+        state = state.copy(
+            selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.None,
+            selfUpdateDismissed = false
+        )
+        SelfUpdateDownloads.enqueue(ctx, info.toOffer())
+        selfUpdateWatch = viewModelScope.launch {
+            val end = SelfUpdateDownloads.state.first {
+                (it is com.vythera.vyxelapps.api.SelfUpdateDownloadState.Downloaded && it.versionCode == info.versionCode) ||
+                (it is com.vythera.vyxelapps.api.SelfUpdateDownloadState.Failed && it.versionCode == info.versionCode)
+            }
+            if (end is com.vythera.vyxelapps.api.SelfUpdateDownloadState.Downloaded) {
+                verifySelfUpdate(info, File(end.filePath))
+            }
+        }
+    }
+
+    private suspend fun verifySelfUpdate(info: SelfUpdateInfo, file: File) {
+        state = state.copy(selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Verifying(info.versionCode))
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.vythera.vyxelapps.api.Verifier.verify(ctx, file, info.sha256, info.signingFingerprint)
+        }
+        val phase = com.vythera.vyxelapps.api.SelfUpdateBanner.phaseFor(result, info.versionCode, file.absolutePath)
+        if (phase is com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed) file.delete() // a file that failed a check is never kept
+        state = state.copy(selfUpdatePhase = phase, selfUpdateDismissed = false)
+    }
+
+    fun installSelfUpdate() {
+        val info  = state.selfUpdateInfo ?: return
+        val ready = state.selfUpdatePhase as? com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Ready ?: return
+        if (ready.versionCode != info.versionCode) return
+        viewModelScope.launch {
+            val outcome = try {
+                InstallGateway.install(ctx, File(ready.filePath), info.sha256, info.signingFingerprint)
+            } catch (_: Exception) { null }
+            when (outcome) {
+                is InstallOutcome.Blocked -> {
+                    File(ready.filePath).delete()
+                    state = state.copy(selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, outcome.reason))
+                }
+                is InstallOutcome.Started -> Unit // Android's installer is open; nothing more to show here
+                null -> state = state.copy(
+                    selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, "The update could not be started. Try again.")
+                )
+            }
+        }
+    }
+
+    /** Cancels a running download and deletes what it had; a cancelled download is not resumed later. */
+    fun cancelSelfUpdate() {
+        selfUpdateWatch?.cancel()
+        selfUpdateWatch = null
+        SelfUpdateDownloads.cancel(ctx)
+        state = state.copy(selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.None)
     }
 }
