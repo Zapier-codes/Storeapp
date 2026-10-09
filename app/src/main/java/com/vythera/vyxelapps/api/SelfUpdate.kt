@@ -55,6 +55,23 @@ object SelfUpdatePlanner {
 
     private val SHA256_HEX = Regex("^[0-9a-fA-F]{64}$")
 
+    /**
+     * Leaf `h.i.zo`: the same decision from the text `ZealotClient.resolveVerifiedIndex()` returns (already
+     * signature-verified, or the last index this device verified), so the caller does no parsing of its own.
+     * A null or blank text, or one that parses to no apps, offers nothing; it never throws.
+     */
+    fun planFromVerifiedText(
+        verifiedIndexJsonText: String?,
+        installedPackage: String,
+        installedVersionCode: Long,
+        deviceSdk: Int
+    ): SelfUpdateDecision {
+        if (verifiedIndexJsonText.isNullOrBlank()) return SelfUpdateDecision.NoOffer("no verified index is available")
+        val entries = parseZealotEntries(verifiedIndexJsonText)
+        if (entries.isEmpty()) return SelfUpdateDecision.NoOffer("the verified index lists no apps")
+        return plan(ZealotIndex(entries), installedPackage, installedVersionCode, deviceSdk)
+    }
+
     fun plan(
         index: ZealotIndex,
         installedPackage: String,

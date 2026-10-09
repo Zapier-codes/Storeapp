@@ -187,10 +187,17 @@ data class UpdateInfo(
     val changelog  : String
 )
 
+// h.i.zo: built from a SelfUpdateOffer (api/SelfUpdate.kt), which already refused any version missing a
+// checksum, size, fingerprint or https URL. The four extra fields are what h.ii (download) and h.iii (install)
+// check the file against; the banner's Update button still opens apkUrl in the browser until h.iii.zo.
 data class SelfUpdateInfo(
-    val latestVersion : String,
-    val apkUrl        : String,
-    val changelog     : String
+    val latestVersion      : String,
+    val apkUrl             : String,
+    val changelog          : String,
+    val versionCode        : Long,
+    val sha256             : String,
+    val sizeBytes          : Long,
+    val signingFingerprint : String
 )
 
 data class ReadmeResponse(
@@ -2654,44 +2661,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setCompareTarget(repo: GitHubRepo?) { state = state.copy(compareTargetRepo = repo) }
 
+    // h.i.zo: the store updates itself from the store. The offer comes from the signed Zealot index through
+    // the same verified fetch the catalog uses (ZealotClient.resolveVerifiedIndex, which checks signature,
+    // schema, freshness and rollback and falls back only to an index this device already verified), then
+    // SelfUpdatePlanner decides. No GitHub repo owner or name is read here, and none is kept as a fallback.
+    // A failed or unverified index, or no offer, shows no banner and says nothing.
     fun checkSelfUpdate() {
         val rawPrefs  = ctx.getSharedPreferences("vyxel_prefs", android.content.Context.MODE_PRIVATE)
         val lastCheck = rawPrefs.getLong("last_update_check", 0L)
         if (System.currentTimeMillis() - lastCheck < 6 * 60 * 60 * 1000L) return
         viewModelScope.launch {
             try {
-                val release = RetrofitClient.service.getLatestRelease("NikhilKain", "vyxel-apps")
-                val latest  = release.tag_name.trimStart('v', 'V')
-                val current = BuildConfig.VERSION_NAME
-                if (isNewerVersion(latest, current)) {
-                    val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk") }
+                val verifiedText = ZealotClient.resolveVerifiedIndex(ctx)
+                val decision = com.vythera.vyxelapps.api.SelfUpdatePlanner.planFromVerifiedText(
+                    verifiedIndexJsonText = verifiedText,
+                    installedPackage      = ctx.packageName,
+                    installedVersionCode  = BuildConfig.VERSION_CODE.toLong(),
+                    deviceSdk             = android.os.Build.VERSION.SDK_INT
+                )
+                val offer = (decision as? com.vythera.vyxelapps.api.SelfUpdateDecision.Offer)?.offer
+                if (offer != null) {
                     state = state.copy(
                         selfUpdateInfo = SelfUpdateInfo(
-                            latestVersion = release.tag_name,
-                            apkUrl        = apkAsset?.browser_download_url
-                                ?: "https://github.com/NikhilKain/vyxel-apps/releases/latest",
-                            changelog     = release.body
+                            latestVersion      = offer.versionName,
+                            apkUrl             = offer.downloadUrl,
+                            changelog          = offer.changelog.orEmpty(),
+                            versionCode        = offer.versionCode,
+                            sha256             = offer.sha256,
+                            sizeBytes          = offer.sizeBytes,
+                            signingFingerprint = offer.signingFingerprint
                         )
                     )
                 }
-                rawPrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                // Recorded only when an index was actually read, so an offline start retries on the next launch
+                // instead of waiting six hours; "no offer" from a real index is a real answer.
+                if (verifiedText != null) {
+                    rawPrefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                }
             } catch (_: Exception) {}
         }
     }
 
     fun dismissSelfUpdate() {
         state = state.copy(selfUpdateDismissed = true)
-    }
-
-    private fun isNewerVersion(latest: String, current: String): Boolean {
-        val l = latest.split(".").mapNotNull { it.toIntOrNull() }
-        val c = current.split(".").mapNotNull { it.toIntOrNull() }
-        for (i in 0 until maxOf(l.size, c.size)) {
-            val lv = l.getOrElse(i) { 0 }
-            val cv = c.getOrElse(i) { 0 }
-            if (lv > cv) return true
-            if (lv < cv) return false
-        }
-        return false
     }
 }

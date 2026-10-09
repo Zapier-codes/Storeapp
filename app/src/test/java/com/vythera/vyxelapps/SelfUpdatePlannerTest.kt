@@ -167,4 +167,39 @@ class SelfUpdatePlannerTest {
         assertEquals(230L, offer!!.versionCode)
         assertEquals("Fixes", offer.changelog)
     }
+
+    // ---- Leaf h.i.zo: the same decision from the verified index text. Written, NOT run.
+
+    private val indexText = """
+        {"apps":[{"id":"2","package_name":"com.vythera.vyxelapps","slug":"appstore","versions":[
+          {"version_name":"1.1.14","version_code":"228","download_url":"https://zealot.example/download/releases/9",
+           "sha256":"${hash}","size_bytes":31238330,"signing_fingerprint":"32f5e77c","status":"available",
+           "changelog":"Self-update planner","compatibility":{"min_sdk":26}}]}]}
+    """.trimIndent()
+
+    @Test
+    fun `text entry point offers the newer version from a real index shape`() {
+        val d = SelfUpdatePlanner.planFromVerifiedText(indexText, pkg, 218L, 34)
+        assertEquals(228L, d.offerOrNull()!!.versionCode)
+        assertEquals("1.1.14", d.offerOrNull()!!.versionName)
+    }
+
+    @Test
+    fun `text entry point offers nothing when the installed version is current or newer`() {
+        assertNull(SelfUpdatePlanner.planFromVerifiedText(indexText, pkg, 228L, 34).offerOrNull())
+        assertNull(SelfUpdatePlanner.planFromVerifiedText(indexText, pkg, 300L, 34).offerOrNull())
+    }
+
+    @Test
+    fun `text entry point never throws and offers nothing for a missing, blank or broken index`() {
+        assertNull(SelfUpdatePlanner.planFromVerifiedText(null, pkg, 1L, 34).offerOrNull())
+        assertNull(SelfUpdatePlanner.planFromVerifiedText("   ", pkg, 1L, 34).offerOrNull())
+        assertNull(SelfUpdatePlanner.planFromVerifiedText("{not json", pkg, 1L, 34).offerOrNull())
+        assertNull(SelfUpdatePlanner.planFromVerifiedText("{\"apps\":[]}", pkg, 1L, 34).offerOrNull())
+    }
+
+    @Test
+    fun `text entry point offers nothing for another package`() {
+        assertNull(SelfUpdatePlanner.planFromVerifiedText(indexText, "com.other.app", 1L, 34).offerOrNull())
+    }
 }
