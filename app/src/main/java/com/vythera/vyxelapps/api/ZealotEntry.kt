@@ -37,6 +37,10 @@ data class ZealotCompatibility(val min_sdk: Int? = null)
 
 data class ZealotVersion(
     val version_name        : String?             = null,
+    /** Task h.i.zi: the index publishes it as a STRING (`"42"`) or null; read only by `SelfUpdatePlanner`. Additive: a reader that never looks at it is unaffected. */
+    val version_code        : String?             = null,
+    /** Task h.i.zi: `"available"`, `"halted"` or `"pulled"` (index v2). Additive, read only by `SelfUpdatePlanner`. */
+    val status              : String?             = null,
     val download_url        : String?             = null,
     val sha256              : String?             = null,
     val size_bytes          : Long?                = null,
