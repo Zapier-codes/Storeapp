@@ -2756,22 +2756,87 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         state = state.copy(selfUpdatePhase = phase, selfUpdateDismissed = false)
     }
 
+    private var selfInstallWatch: kotlinx.coroutines.Job? = null
+
+    /**
+     * h.iii.zo: Install runs `SelfInstaller` (a PackageInstaller session after the checks). Order of attempts:
+     *  1. the session; its result arrives through `SelfInstalls.state` and is shown by the banner;
+     *  2. if the session cannot start (not a problem with the file), `InstallGateway` with the same file, which
+     *     verifies again and opens Android's installer;
+     *  3. if that throws, the download link opens in the browser, as the banner always did before Track h.
+     * A file the checks refuse, or that is signed by another key, is deleted and never installed by any step.
+     */
     fun installSelfUpdate() {
         val info  = state.selfUpdateInfo ?: return
         val ready = state.selfUpdatePhase as? com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Ready ?: return
         if (ready.versionCode != info.versionCode) return
-        viewModelScope.launch {
-            val outcome = try {
-                InstallGateway.install(ctx, File(ready.filePath), info.sha256, info.signingFingerprint)
-            } catch (_: Exception) { null }
-            when (outcome) {
-                is InstallOutcome.Blocked -> {
-                    File(ready.filePath).delete()
-                    state = state.copy(selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, outcome.reason))
+        val file = File(ready.filePath)
+
+        // A stale report from an earlier attempt must not be shown for this one: reset, then watch.
+        SelfInstalls.publish(com.vythera.vyxelapps.api.SelfInstallState.Idle)
+        selfInstallWatch?.cancel()
+        selfInstallWatch = viewModelScope.launch {
+            SelfInstalls.state.collect { report ->
+                if (report is com.vythera.vyxelapps.api.SelfInstallState.Succeeded && report.versionCode == info.versionCode) {
+                    // The store has been replaced by the new version: nothing left to offer.
+                    state = state.copy(selfUpdateInfo = null, selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.None)
+                } else {
+                    com.vythera.vyxelapps.api.SelfUpdateBanner.phaseForInstall(report, info.versionCode)?.let { phase ->
+                        state = state.copy(selfUpdatePhase = phase, selfUpdateDismissed = false)
+                    }
                 }
-                is InstallOutcome.Started -> Unit // Android's installer is open; nothing more to show here
-                null -> state = state.copy(
-                    selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, "The update could not be started. Try again.")
+            }
+        }
+
+        viewModelScope.launch {
+            val start = try {
+                SelfInstaller.install(ctx, file, info.versionCode, info.sha256, info.signingFingerprint)
+            } catch (e: Exception) {
+                SelfInstaller.Start.CannotStart("The install could not be started: ${e.message ?: e.javaClass.simpleName}.")
+            }
+            when (start) {
+                SelfInstaller.Start.Committed -> Unit // progress and the result come through SelfInstalls.state
+                is SelfInstaller.Start.Refused -> {
+                    file.delete()
+                    state = state.copy(
+                        selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, start.reason),
+                        selfUpdateDismissed = false
+                    )
+                }
+                is SelfInstaller.Start.CannotStart -> installSelfUpdateFallback(info, file)
+            }
+        }
+    }
+
+    /** Steps 2 and 3 of [installSelfUpdate]: the old install path, then the browser link. */
+    private suspend fun installSelfUpdateFallback(info: SelfUpdateInfo, file: File) {
+        val outcome = try {
+            InstallGateway.install(ctx, file, info.sha256, info.signingFingerprint)
+        } catch (_: Exception) { null }
+        when (outcome) {
+            is InstallOutcome.Started -> Unit // Android's installer is open; the banner stays on "ready"
+            is InstallOutcome.Blocked -> {
+                file.delete()
+                state = state.copy(
+                    selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(info.versionCode, outcome.reason),
+                    selfUpdateDismissed = false
+                )
+            }
+            null -> {
+                val opened = try {
+                    ctx.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(info.apkUrl))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                    true
+                } catch (_: Exception) { false }
+                state = state.copy(
+                    selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.Failed(
+                        info.versionCode,
+                        if (opened) "The store could not install the update itself, so the download was opened in your browser."
+                        else "The store could not install the update. Try again later."
+                    ),
+                    selfUpdateDismissed = false
                 )
             }
         }
@@ -2781,6 +2846,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun cancelSelfUpdate() {
         selfUpdateWatch?.cancel()
         selfUpdateWatch = null
+        selfInstallWatch?.cancel()
+        selfInstallWatch = null
         SelfUpdateDownloads.cancel(ctx)
         state = state.copy(selfUpdatePhase = com.vythera.vyxelapps.api.SelfUpdateCheckPhase.None)
     }

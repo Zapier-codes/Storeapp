@@ -1,5 +1,6 @@
 package com.vythera.vyxelapps
 
+import com.vythera.vyxelapps.api.SelfInstallState
 import com.vythera.vyxelapps.api.SelfUpdateBanner
 import com.vythera.vyxelapps.api.SelfUpdateBannerState
 import com.vythera.vyxelapps.api.SelfUpdateCheckPhase
@@ -106,5 +107,27 @@ class SelfUpdateBannerTest {
         }
         assertTrue((SelfUpdateBanner.phaseFor(results[0], code, "/x") as SelfUpdateCheckPhase.Failed).reason.contains("checksum"))
         assertTrue((SelfUpdateBanner.phaseFor(results[2], code, "/x") as SelfUpdateCheckPhase.Failed).reason.contains("disk"))
+    }
+
+    // ---- Leaf h.iii.zo: the Installing state and the mapping from the install session's reports. Written, NOT run.
+
+    @Test
+    fun `an install in progress shows Installing, with or without Android's confirmation screen`() {
+        val done = SelfUpdateDownloadState.Downloaded(code, "/x.apk", 10L)
+        assertEquals(SelfUpdateBannerState.Installing(name, false), state(done, SelfUpdateCheckPhase.Installing(code, false)))
+        assertEquals(SelfUpdateBannerState.Installing(name, true), state(done, SelfUpdateCheckPhase.Installing(code, true)))
+        // an Installing phase of another version is ignored
+        assertEquals(SelfUpdateBannerState.Verifying(name), state(done, SelfUpdateCheckPhase.Installing(code - 1L, false)))
+    }
+
+    @Test
+    fun `install reports map to phases for this version only`() {
+        assertEquals(SelfUpdateCheckPhase.Installing(code, false), SelfUpdateBanner.phaseForInstall(SelfInstallState.Running(code), code))
+        assertEquals(SelfUpdateCheckPhase.Installing(code, true), SelfUpdateBanner.phaseForInstall(SelfInstallState.AwaitingConfirmation(code), code))
+        assertEquals(SelfUpdateCheckPhase.Failed(code, "no space"), SelfUpdateBanner.phaseForInstall(SelfInstallState.Failed(code, "no space"), code))
+        assertNull(SelfUpdateBanner.phaseForInstall(SelfInstallState.Idle, code))
+        assertNull(SelfUpdateBanner.phaseForInstall(SelfInstallState.Succeeded(code), code)) // the caller removes the banner
+        assertNull(SelfUpdateBanner.phaseForInstall(SelfInstallState.Running(code - 1L), code))
+        assertNull(SelfUpdateBanner.phaseForInstall(SelfInstallState.Failed(code - 1L, "old"), code))
     }
 }

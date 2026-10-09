@@ -49,6 +49,8 @@ object SelfInstaller {
 
     const val ACTION_RESULT = "com.vythera.vyxelapps.SELF_UPDATE_RESULT"
     const val EXTRA_VERSION_CODE = "self_update_version_code"
+    /** Preference key (in `vyxel_prefs`) holding the versionCode of an update this store has committed and not yet seen replace it. */
+    const val PENDING_KEY = "self_update_pending"
 
     suspend fun install(
         ctx: Context,
@@ -113,12 +115,15 @@ object SelfInstaller {
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
                 val pending = PendingIntent.getBroadcast(app, sessionId, intent, flags)
+                // Marks that the replacement of this app is OUR doing, so SelfUpdatedReceiver reopens the store only then.
+                app.getSharedPreferences("vyxel_prefs", Context.MODE_PRIVATE).edit().putLong(PENDING_KEY, versionCode).apply()
                 SelfInstalls.publish(SelfInstallState.Running(versionCode))
                 session.commit(pending.intentSender)
             }
             Start.Committed
         } catch (e: Exception) {
             if (sessionId >= 0) try { installer.abandonSession(sessionId) } catch (_: Exception) {}
+            app.getSharedPreferences("vyxel_prefs", Context.MODE_PRIVATE).edit().remove(PENDING_KEY).apply()
             SelfInstalls.publish(SelfInstallState.Idle)
             Start.CannotStart("Could not start the install session: ${e.message ?: e.javaClass.simpleName}.")
         }

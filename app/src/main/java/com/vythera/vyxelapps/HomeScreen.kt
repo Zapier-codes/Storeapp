@@ -543,6 +543,8 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
                                             is SelfUpdateBannerState.Downloading    -> "Downloading update ${b.versionName}" to "${b.percent}%"
                                             is SelfUpdateBannerState.Verifying      -> "Checking update ${b.versionName}" to "Verifying checksum and signature"
                                             is SelfUpdateBannerState.ReadyToInstall -> "Update ${b.versionName} is ready" to "Tap Install to update the store"
+                                            is SelfUpdateBannerState.Installing     -> "Installing update ${b.versionName}" to
+                                                if (b.awaitingConfirmation) "Confirm in the Android screen that opened" else "Handing the update to Android"
                                             is SelfUpdateBannerState.Failed         -> "Update failed" to b.reason
                                             null                                    -> "" to null
                                         }
@@ -567,6 +569,9 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
                                             is SelfUpdateBannerState.Verifying -> LinearProgressIndicator(
                                                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                                             )
+                                            is SelfUpdateBannerState.Installing -> LinearProgressIndicator(
+                                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                                            )
                                             else -> Unit
                                         }
                                     }
@@ -576,7 +581,7 @@ fun HomeScreen(viewModel: AppViewModel = viewModel()) {
                                         is SelfUpdateBannerState.Downloading    -> TextButton(onClick = { viewModel.cancelSelfUpdate() }) { Text("Cancel") }
                                         is SelfUpdateBannerState.ReadyToInstall -> FilledTonalButton(onClick = { viewModel.installSelfUpdate() }) { Text("Install") }
                                         is SelfUpdateBannerState.Failed         -> FilledTonalButton(onClick = { viewModel.startSelfUpdate() }) { Text("Retry") }
-                                        is SelfUpdateBannerState.Verifying, null -> Unit
+                                        is SelfUpdateBannerState.Verifying, is SelfUpdateBannerState.Installing, null -> Unit
                                     }
                                     IconButton(onClick = { viewModel.dismissSelfUpdate() }) {
                                         Icon(Icons.Rounded.Close, contentDescription = "Dismiss", tint = MaterialTheme.colorScheme.onPrimaryContainer)

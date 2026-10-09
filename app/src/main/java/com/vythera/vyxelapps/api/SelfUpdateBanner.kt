@@ -6,13 +6,15 @@ package com.vythera.vyxelapps.api
  * the composable only draws the result. Nothing here touches Android or the disk.
  *
  * The states, in the order a user sees them: Available, Downloading (percent, Cancel), Verifying, ReadyToInstall,
- * and Failed (a plain reason and Retry). The dismiss button is not a state; it hides the banner and is kept.
+ * Installing, and Failed (a plain reason and Retry). The dismiss button is not a state; it hides the banner and is kept.
  */
 sealed class SelfUpdateBannerState {
     data class Available(val versionName: String, val changelogLine: String?) : SelfUpdateBannerState()
     data class Downloading(val versionName: String, val percent: Int) : SelfUpdateBannerState()
     data class Verifying(val versionName: String) : SelfUpdateBannerState()
     data class ReadyToInstall(val versionName: String) : SelfUpdateBannerState()
+    /** The install session is open. [awaitingConfirmation] is true while Android's own confirmation screen is up. */
+    data class Installing(val versionName: String, val awaitingConfirmation: Boolean) : SelfUpdateBannerState()
     data class Failed(val versionName: String, val reason: String) : SelfUpdateBannerState()
 }
 
@@ -24,6 +26,7 @@ sealed class SelfUpdateCheckPhase {
     object None : SelfUpdateCheckPhase()
     data class Verifying(val versionCode: Long) : SelfUpdateCheckPhase()
     data class Ready(val versionCode: Long, val filePath: String) : SelfUpdateCheckPhase()
+    data class Installing(val versionCode: Long, val awaitingConfirmation: Boolean) : SelfUpdateCheckPhase()
     data class Failed(val versionCode: Long, val reason: String) : SelfUpdateCheckPhase()
 }
 
@@ -59,6 +62,9 @@ object SelfUpdateBanner {
             is SelfUpdateCheckPhase.Verifying -> if (phase.versionCode == versionCode) {
                 return SelfUpdateBannerState.Verifying(versionName)
             }
+            is SelfUpdateCheckPhase.Installing -> if (phase.versionCode == versionCode) {
+                return SelfUpdateBannerState.Installing(versionName, phase.awaitingConfirmation)
+            }
             SelfUpdateCheckPhase.None -> Unit
         }
         return when (download) {
@@ -73,6 +79,22 @@ object SelfUpdateBanner {
             } else available(versionName, changelog)
             SelfUpdateDownloadState.Idle -> available(versionName, changelog)
         }
+    }
+
+    /**
+     * h.iii.zo: the check phase to show for one report from the store's own install session, or null when the
+     * report changes nothing the banner shows (idle, a report about another offer, or success: after a success the
+     * caller removes the banner, because the store has been replaced by the new version).
+     */
+    fun phaseForInstall(install: SelfInstallState, versionCode: Long): SelfUpdateCheckPhase? = when (install) {
+        SelfInstallState.Idle -> null
+        is SelfInstallState.Running ->
+            if (install.versionCode == versionCode) SelfUpdateCheckPhase.Installing(versionCode, false) else null
+        is SelfInstallState.AwaitingConfirmation ->
+            if (install.versionCode == versionCode) SelfUpdateCheckPhase.Installing(versionCode, true) else null
+        is SelfInstallState.Succeeded -> null
+        is SelfInstallState.Failed ->
+            if (install.versionCode == versionCode) SelfUpdateCheckPhase.Failed(versionCode, install.reason) else null
     }
 
     private fun available(versionName: String, changelog: String?) =

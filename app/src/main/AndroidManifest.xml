@@ -89,6 +89,15 @@
             android:name=".SelfUpdateReceiver"
             android:exported="false" />
 
+        <!-- h.iii.zo: reopens the store after its own update replaced it (acts only for an update this store committed). -->
+        <receiver
+            android:name=".SelfUpdatedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- h.ii.zi: WorkManager's own foreground service, given the dataSync type the permission above is for. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
