@@ -129,6 +129,12 @@ fun SettingsScreen(
         com.vythera.vyxelapps.root.RootManager.None,
     rootChecking: Boolean = false,
     onCheckRoot: () -> Unit = {},
+    /**
+     * S-P3: device-policy managed configuration, if any. Defaults to none so a caller that
+     * does not know about managed config (Classic's host) compiles unchanged.
+     */
+    managedConfig: com.vythera.vyxelapps.enterprise.ManagedConfig =
+        com.vythera.vyxelapps.enterprise.ManagedConfig.NONE,
     modifier: Modifier = Modifier,
 ) {
     var token by remember(settings.githubToken) { mutableStateOf(settings.githubToken) }
@@ -155,6 +161,19 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
             )
+        }
+
+        // S-P3: surfaced only when a device policy controller is steering this install.
+        if (managedConfig.isManaged) {
+            item(key = "managed") {
+                SettingsCard(xs.managedTitle) {
+                    Text(
+                        text = xs.managedBody,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         item(key = "uistyle") {
@@ -348,6 +367,14 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (managedConfig.hiddenPackages.isNotEmpty()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = xs.managedHiddenNote,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     if (settings.hiddenPackages.isNotEmpty()) {
                         Spacer(Modifier.width(12.dp))

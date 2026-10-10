@@ -393,7 +393,9 @@ fun SearchSortFilterRow(
     var filterMenu by remember { mutableStateOf(false) }
     val activeFilters = (if (filters.installedOnly) 1 else 0) +
             (if (filters.hasApkOnly) 1 else 0) +
-            (if (filters.minStars > 0) 1 else 0)
+            (if (filters.minStars > 0) 1 else 0) +
+            (if (filters.contentClass != null) 1 else 0) +   // S-P1
+            (if (filters.worksOnDevice) 1 else 0)            // S-P2
 
     Row(
         modifier              = Modifier
@@ -454,6 +456,38 @@ fun SearchSortFilterRow(
                         text        = { Text(if (n == 0) "Any" else "${formatStars(n)}+") },
                         onClick     = { onFilters(filters.copy(minStars = n)) },
                         trailingIcon = if (filters.minStars == n) {
+                            { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+                HorizontalDivider()
+                // S-P2 — "works on your device": drops only apps whose published minSdk the device fails.
+                DropdownMenuItem(
+                    text    = { Text("Works on this device") },
+                    onClick = { onFilters(filters.copy(worksOnDevice = !filters.worksOnDevice)) },
+                    trailingIcon = if (filters.worksOnDevice) {
+                        { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
+                    } else null
+                )
+                HorizontalDivider()
+                Text(
+                    "Content rating",
+                    style    = MaterialTheme.typography.labelSmall,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp, top = 8.dp)
+                )
+                // S-P1 — the parental/age filter; unrated apps appear under "Any" only.
+                listOf(
+                    null            to "Any rating",
+                    ContentClass.EVERYONE to "Everyone",
+                    ContentClass.TEEN     to "Teen",
+                    ContentClass.MATURE   to "Mature",
+                    ContentClass.ADULTS   to "Adults only",
+                ).forEach { (cls, label) ->
+                    DropdownMenuItem(
+                        text    = { Text(label) },
+                        onClick = { onFilters(filters.copy(contentClass = cls)) },
+                        trailingIcon = if (filters.contentClass == cls) {
                             { Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)) }
                         } else null
                     )

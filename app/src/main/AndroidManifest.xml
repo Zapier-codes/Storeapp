@@ -35,6 +35,11 @@
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="false">
 
+        <!-- S-P3: the managed-configuration keys a device policy controller may set. -->
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

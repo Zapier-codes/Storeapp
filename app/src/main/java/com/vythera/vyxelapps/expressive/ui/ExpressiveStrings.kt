@@ -112,6 +112,10 @@ data class ExpressiveStrings(
     val hiddenAppsCount: String = "%d hidden from every source",
     val hiddenAppsNone: String = "Nothing hidden",
     val restoreAllHidden: String = "Restore all",
+    /** S-P3: shown when a device policy controller manages this install. */
+    val managedTitle: String = "Managed by your organisation",
+    val managedBody: String = "Some settings below are set by your organisation's device policy and cannot be changed here.",
+    val managedHiddenNote: String = "Includes apps hidden by your organisation",
 
     // ── Shizuku ───────────────────────────────────────────────────────────────
     val shizukuFilter: String = "Shizuku",

@@ -198,11 +198,44 @@ enum class SearchSort(val label: String) {
     SIZE("Size"),
 }
 
-/** Catalogue filters layered on top of the platform/source chips already present. */
+/**
+ * Play's content/age rating tiers, normalized into a filterable class — card S-P1 (the client half of
+ * D-P7). Sources give the rating as free text ("Everyone", "Teen", "Mature 17+", ESRB/PEGI variants), so
+ * the filter keys on a class rather than the exact string. An app whose source gave no rating (or one we
+ * cannot place) is treated as unrated and only appears under "Any" — never guessed into a class.
+ */
+enum class ContentClass { EVERYONE, TEEN, MATURE, ADULTS }
+
+/** Place a free-form content-rating string into a class, or null when it cannot be placed. */
+fun contentClassOf(rating: String?): ContentClass? {
+    val text = rating?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
+    return when {
+        Regex("adult|18\\+|porn|only 18").containsMatchIn(text)                 -> ContentClass.ADULTS
+        Regex("mature|17\\+|\\bm\\b|esrb.*m").containsMatchIn(text)             -> ContentClass.MATURE
+        Regex("teen|12\\+|13\\+|16\\+|esrb.*t").containsMatchIn(text)           -> ContentClass.TEEN
+        Regex("everyone|all ages|3\\+|\\be\\b|esrb.*e|general").containsMatchIn(text) -> ContentClass.EVERYONE
+        else -> null
+    }
+}
+
+/** Mildest-first order, so a "limit" filter can keep everything at or below the chosen class. */
+private val CONTENT_CLASS_ORDER = listOf(
+    ContentClass.EVERYONE, ContentClass.TEEN, ContentClass.MATURE, ContentClass.ADULTS,
+)
+
+/**
+ * Catalogue filters layered on top of the platform/source chips already present.
+ *
+ * `contentClass` (card S-P1) is Play's parental/content filter. `worksOnDevice` (card S-P2) keeps only
+ * apps whose published `minSdk` (Z-P14) the device meets; it needs `deviceApiLevel` passed to
+ * [applySearchView], and an app with no published `minSdk` is never dropped by it.
+ */
 data class SearchFilters(
     val installedOnly : Boolean = false,
     val hasApkOnly    : Boolean = false,
     val minStars      : Int     = 0,
+    val contentClass  : ContentClass? = null,
+    val worksOnDevice : Boolean = false,
 )
 
 fun applySearchView(
@@ -210,11 +243,19 @@ fun applySearchView(
     sort    : SearchSort,
     filters : SearchFilters,
     installed: Set<Long>,
+    deviceApiLevel: Int = 0,   // S-P2: `Build.VERSION.SDK_INT`; 0 (unknown) never drops anything.
 ): List<GitHubRepo> {
+    val ceiling = filters.contentClass?.let { CONTENT_CLASS_ORDER.indexOf(it) } ?: -1
     val filtered = apps.filter { r ->
         (!filters.installedOnly || r.id in installed) &&
         (!filters.hasApkOnly || r.apkUrl.isNotBlank() || r.apkSize > 0) &&
-        r.stargazers_count >= filters.minStars
+        r.stargazers_count >= filters.minStars &&
+        // S-P1: a real class keeps the app only when its own class is at or below the ceiling.
+        (filters.contentClass == null || (contentClassOf(r.contentRating)?.let {
+            CONTENT_CLASS_ORDER.indexOf(it) <= ceiling
+        } ?: false)) &&
+        // S-P2: drop only when the app published a minSdk the device provably fails.
+        (!filters.worksOnDevice || deviceApiLevel <= 0 || (r.minSdk ?: 0) <= 0 || deviceApiLevel >= r.minSdk)
     }
     return when (sort) {
         SearchSort.RELEVANCE -> filtered

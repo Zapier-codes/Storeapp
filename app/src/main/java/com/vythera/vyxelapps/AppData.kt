@@ -117,6 +117,19 @@ data class GitHubRepo(
     // entries cached before this field existed. See the nullability note on
     // InstallHistoryEntry.iconUrl for why that distinction matters.
     val apkSize: Long = 0L,
+    /**
+     * Content/age rating as the source reports it (e.g. "Everyone", "Teen", "Mature 17+") -- card S-P1.
+     * `null` for every source that does not publish one (the default), which the age filter treats as
+     * unrated. Nullable so Gson leaves it null on entries cached before this field existed, and so the
+     * filter never has to guess.
+     */
+    val contentRating: String? = null,
+    /**
+     * The release's `minSdk` API level, published by Zealot's signed index (Z-P14) -- card S-P2. `0`
+     * (default) means "not published", and the "works on your device" filter never drops an app for it.
+     * A primitive, so a cached entry without it reads as `0`, the same "unknown" the filter expects.
+     */
+    val minSdk: Int = 0,
     /** Source-claimed SHA-256 of the APK bytes -- `1.a.iv.zi`. Checked by `InstallGateway`/
      *  `Verifier` (`1.b.i.zi`/`1.b.i.zo`) at install time. `null` for every source that doesn't
      *  supply one -- today that's six of the seven; only Zealot's `ZealotVersion.sha256`

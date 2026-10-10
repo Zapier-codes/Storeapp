@@ -442,6 +442,7 @@ fun ExpressiveShell(
                                 classicState.searchSort,
                                 classicState.searchFilters,
                                 installedIds,
+                                android.os.Build.VERSION.SDK_INT,
                             ).map { it.toAppItem() }
                         },
                         submitted = classicState.searchQuery.isNotBlank(),
@@ -615,6 +616,7 @@ fun ExpressiveShell(
                         )
                     },
                     onClearHidden = { viewModel.clearHidden() },
+                    managedConfig = viewModel.managedConfig,
                     rootManager = rootManager,
                     rootChecking = rootChecking,
                     onCheckRoot = viewModel::checkRoot,

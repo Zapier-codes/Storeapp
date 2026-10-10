@@ -3,6 +3,9 @@ package com.vythera.vyxelapps.expressive.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.vythera.vyxelapps.enterprise.ManagedConfig
+import com.vythera.vyxelapps.enterprise.ManagedConfigReader
+import com.vythera.vyxelapps.enterprise.withManaged
 import com.vythera.vyxelapps.expressive.data.CatalogRepository
 import com.vythera.vyxelapps.expressive.data.Settings
 import com.vythera.vyxelapps.expressive.data.SettingsStore
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -71,12 +75,21 @@ data class DetailUiState(
 class StoreViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settingsStore = SettingsStore(app)
+
+    /**
+     * S-P3: managed configuration set by a device policy controller, if any. Read once at
+     * construction; on the overwhelming majority of devices there is no DPC and this is
+     * [ManagedConfig.NONE], so nothing changes for the person.
+     */
+    val managedConfig: ManagedConfig = ManagedConfigReader(app).read()
+
     private val repository = CatalogRepository(app, settingsStore)
     val downloads = DownloadManager(app)
     private val installer = ApkInstaller(app)
     private val installedApps = InstalledApps(app)
 
     val settings: StateFlow<Settings> = settingsStore.settings
+        .map { it.withManaged(managedConfig) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
 
     val sourceStates: StateFlow<Map<SourceId, SourceState>> = repository.states
@@ -636,6 +649,9 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
             _snackbar.value = strings.snackCannotHide
             return
         }
+        // S-P3: a package the organisation hid cannot be restored from inside the app. Refusing
+        // here (rather than silently re-hiding) tells the person why rather than doing nothing.
+        if (!hidden && managedConfig.hiddenPackages.contains(pkg)) return
         viewModelScope.launch {
             settingsStore.setHidden(pkg, hidden)
             _snackbar.value = if (hidden) {
@@ -653,6 +669,8 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     fun clearHidden() =
         viewModelScope.launch {
             settingsStore.clearHidden()
+            // S-P3: clearing the person's hidden list never removes an organisation's hides.
+            managedConfig.hiddenPackages.forEach { settingsStore.setHidden(it, true) }
             _snackbar.value = strings.snackHiddenCleared
             loadHome()
             rerunQuery()

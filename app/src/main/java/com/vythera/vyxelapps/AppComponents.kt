@@ -2149,7 +2149,7 @@ fun SearchScreen(
         }
         // Play-parity sort + filters, applied last so they order the fully
         // filtered list (including catalogues shown from a source chip).
-        applySearchView(list, searchSort, searchFilters, installed)
+        applySearchView(list, searchSort, searchFilters, installed, android.os.Build.VERSION.SDK_INT)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(

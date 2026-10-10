@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  S-P3: the keys a device policy controller (Android Enterprise / Headwind MDM / any DPC) may set
+  through managed configuration. Declared here so a DPC's console shows the same names the client
+  reads in `ManagedConfigRules`. Every key is optional; one the organisation omits leaves the
+  person's own choice in place.
+-->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Comma/space separated SourceId names (e.g. "Zealot,FDroid,GitHub"). Blank = person chooses;
+         "none" = no sources. Unknown names are ignored. -->
+    <restriction
+        android:key="enabled_sources"
+        android:title="Enabled sources"
+        android:description="Which catalogue sources this store may show. Comma-separated names; blank leaves the person's own choice; 'none' disables browsing."
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <!-- true/false. Unset leaves the person's own choice. -->
+    <restriction
+        android:key="show_desktop_sources"
+        android:title="Show desktop sources"
+        android:description="Whether Linux and Windows sources appear. Unset leaves the person's own choice."
+        android:restrictionType="bool" />
+
+    <!-- Comma/space separated package names the store must always hide. The person cannot restore
+         these in-app. -->
+    <restriction
+        android:key="hidden_packages"
+        android:title="Hidden packages"
+        android:description="Package names to hide everywhere. The person cannot un-hide these from inside the app."
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+</restrictions>
