@@ -91,6 +91,15 @@ fun SearchScreen(
     recentSearches: List<String> = emptyList(),
     onRecentClick: (String) -> Unit = {},
     onClearRecent: () -> Unit = {},
+    // ── Play-parity: sort + filters (docs/PLAY-PARITY.md) ────────────────────
+    /** Sort key, held in Classic's shared settings so both shells agree. */
+    sort: com.vythera.vyxelapps.SearchSort = com.vythera.vyxelapps.SearchSort.RELEVANCE,
+    onSort: (com.vythera.vyxelapps.SearchSort) -> Unit = {},
+    /** Catalogue filters (installed / has-APK / minimum stars). */
+    filters: com.vythera.vyxelapps.SearchFilters = com.vythera.vyxelapps.SearchFilters(),
+    onFilters: (com.vythera.vyxelapps.SearchFilters) -> Unit = {},
+    /** Package names installed on the device, for the "installed only" filter. */
+    installedPackages: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -167,6 +176,18 @@ fun SearchScreen(
                     onClick = { onToggleSource(source, source !in enabledSources) },
                 )
             }
+        }
+
+        // Play-parity sort + filters, above the results. Only shown once a query
+        // exists — a sort control over an empty result list is noise. The row
+        // reads/writes Classic's shared settings through its callbacks.
+        if (state.query.isNotBlank()) {
+            com.vythera.vyxelapps.SearchSortFilterRow(
+                sort = sort,
+                filters = filters,
+                onSort = onSort,
+                onFilters = onFilters,
+            )
         }
 
         when {

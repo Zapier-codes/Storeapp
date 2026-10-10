@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import com.vythera.vyxelapps.api.Verifier
+import com.vythera.vyxelapps.api.VerifierPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -65,17 +66,8 @@ object InstallGateway {
             Verifier.verify(ctx, apkFile, claimedSha256, claimedSigningFingerprint)
         }
 
-        val blockedReason = when (result) {
-            is Verifier.Result.ChecksumMismatch ->
-                "Downloaded file's checksum did not match what the source published — refusing to install."
-            is Verifier.Result.SignatureMismatch ->
-                "Downloaded file's signing certificate did not match what the source published — refusing to install."
-            is Verifier.Result.Unreadable ->
-                "Could not read the downloaded file to verify it (${result.reason}) — refusing to install."
-            is Verifier.Result.Unparsable ->
-                "Could not parse the downloaded file to verify its signing certificate (${result.reason}) — refusing to install."
-            is Verifier.Result.Trusted, is Verifier.Result.PartiallyVerified, is Verifier.Result.NothingToVerify -> null
-        }
+        // j.vii.a: the policy lives in VerifierPolicy so the Expressive shell applies the very same rule.
+        val blockedReason = VerifierPolicy.blockedReason(result)
 
         if (blockedReason != null) return InstallOutcome.Blocked(result, blockedReason)
 

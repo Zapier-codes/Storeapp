@@ -556,6 +556,21 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             downloads.download(target).onSuccess { file ->
+                // j.vii.a: the same check Classic's InstallGateway makes, BEFORE the file reaches PackageInstaller
+                // or Shizuku. With no claim on the item (every source but Zealot's signed index today) this reads
+                // nothing and passes; with one, a mismatch or an unreadable file stops the install and deletes it.
+                val verdict = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.vythera.vyxelapps.api.Verifier.verify(
+                        getApplication<Application>(), file, target.claimedSha256, target.claimedSigningFingerprint,
+                    )
+                }
+                val blocked = com.vythera.vyxelapps.api.VerifierPolicy.blockedReason(verdict)
+                if (blocked != null) {
+                    runCatching { file.delete() }
+                    downloads.setState(item.id, DownloadState.Failed(blocked))
+                    _snackbar.value = blocked
+                    return@launch
+                }
                 downloads.setState(item.id, DownloadState.Installing)
                 // Remembered against the resolved item, so the history entry records
                 // the version that was actually installed rather than the stale one

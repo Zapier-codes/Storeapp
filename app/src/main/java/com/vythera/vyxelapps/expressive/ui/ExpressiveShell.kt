@@ -62,6 +62,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.vythera.vyxelapps.expressive.data.model.AppItem
+import com.vythera.vyxelapps.expressive.data.model.AppRail
+import com.vythera.vyxelapps.expressive.data.model.SourceId
 import com.vythera.vyxelapps.expressive.data.toAppItem
 import com.vythera.vyxelapps.expressive.data.toGitHubRepo
 import com.vythera.vyxelapps.expressive.data.toScanRow
@@ -80,6 +82,8 @@ import com.vythera.vyxelapps.expressive.ui.theme.VyxelShapeTokens
 import com.vythera.vyxelapps.expressive.ui.theme.VyxelSkin
 import com.vythera.vyxelapps.expressive.ui.theme.glassSurface
 import com.vythera.vyxelapps.expressive.ui.theme.palette
+import com.vythera.vyxelapps.applySearchView
+import com.vythera.vyxelapps.badgesFor
 import kotlinx.coroutines.delay
 
 /**
@@ -89,7 +93,7 @@ import kotlinx.coroutines.delay
  * is a plain state machine: there is exactly one place that decides what back does, and
  * the tab underneath keeps its scroll position for free.
  */
-enum class SubScreen { None, TrackApp, TrackRepoSearch, ManageRepos, AddRepo, Library, Modules }
+enum class SubScreen { None, TrackApp, TrackRepoSearch, ManageRepos, AddRepo, Library, Modules, Developer }
 
 enum class Tab(val icon: ImageVector) {
     Home(Icons.Filled.Explore),
@@ -355,6 +359,26 @@ fun ExpressiveShell(
                             }
                         )
                     }
+                    // j.vii.b: our own signed store leads the rails. When the repository
+                    // already produced a Zealot rail it is kept as-is; otherwise (an install
+                    // whose enabled-source set predates this source) the rail is added from
+                    // Classic's already-loaded `zealotApps`, so the apps show either way and
+                    // the two rails never double up.
+                    val withZealot = remember(heroState, classicState.zealotApps) {
+                        val already = heroState.rails.any { it.source == SourceId.Zealot }
+                        val zealotItems = classicState.zealotApps.map { it.toAppItem() }
+                        if (already || zealotItems.isEmpty()) heroState
+                        else heroState.copy(
+                            rails = listOf(
+                                AppRail(
+                                    "From our store",
+                                    "Published and signed through Zealot",
+                                    SourceId.Zealot,
+                                    zealotItems,
+                                )
+                            ) + heroState.rails,
+                        )
+                    }
                     // Store-only pins have no APK and no release to open a detail page
                     // on, so tapping one goes straight to its listing.
                     val externalPins = remember(classicState.featuredPins) {
@@ -363,7 +387,7 @@ fun ExpressiveShell(
                             .associate { it.packageName to it.storeUrl }
                     }
                     HomeScreen(
-                        state = heroState,
+                        state = withZealot,
                         sourceStates = sourceStates,
                         onItemClick = { item ->
                             val store = externalPins[item.packageName]
@@ -391,6 +415,9 @@ fun ExpressiveShell(
                             platformFilter,
                             shizukuOnly,
                             settings.hiddenPackages,
+                            classicState.searchSort,
+                            classicState.searchFilters,
+                            classicState.installHistory,
                         ) {
                             // Classic's engine plus the sources it has no enum for.
                             // Deduplicated on package so an app both engines found —
@@ -402,9 +429,20 @@ fun ExpressiveShell(
                             // Re-rank the whole thing: appending one engine's output
                             // after the other's leaves the newcomers unordered at the
                             // bottom, however good a match they are.
-                            viewModel.applyFilters(
-                                viewModel.rankResults(merged, classicState.searchQuery)
-                            )
+                            val ranked = viewModel.rankResults(merged, classicState.searchQuery)
+                            // j.vii.b: our own store is the truth for an app it carries, so a
+                            // Zealot copy is promoted ahead of the mirrors of the same package.
+                            val promoted = ranked.sortedByDescending { it.source == SourceId.Zealot }
+                            // Play-parity sort + filters, the same engine Classic's
+                            // own search uses, over the same shared settings — so a
+                            // choice made here and in Classic agree.
+                            val installedIds = classicState.installHistory.map { it.repoId }.toSet()
+                            applySearchView(
+                                promoted.map { it.toGitHubRepo() },
+                                classicState.searchSort,
+                                classicState.searchFilters,
+                                installedIds,
+                            ).map { it.toAppItem() }
                         },
                         submitted = classicState.searchQuery.isNotBlank(),
                     ),
@@ -429,6 +467,16 @@ fun ExpressiveShell(
                     recentSearches = classicState.recentSearches,
                     onRecentClick = { appViewModel.onSearch(it) },
                     onClearRecent = appViewModel::clearRecentSearches,
+                    // Play-parity sort + filters, held in Classic's shared settings so
+                    // a choice made here is still set when the user switches shells.
+                    sort = classicState.searchSort,
+                    onSort = appViewModel::setSearchSort,
+                    filters = classicState.searchFilters,
+                    onFilters = appViewModel::setSearchFilters,
+                    installedPackages = classicState.installHistory
+                        .map { it.packageName }
+                        .filter { it.isNotBlank() }
+                        .toSet(),
                 )
 
                 // Updates also come from Classic's scan engine, including its
@@ -755,6 +803,33 @@ fun ExpressiveShell(
                         onUninstall = { viewModel.uninstall(effectiveItem) },
                         onDownloadZip = { viewModel.downloadModuleZip(effectiveItem) },
                         onInstallModule = { viewModel.installModule(effectiveItem) },
+                        // Play-parity (docs/PLAY-PARITY.md): badges, rating line,
+                        // Data Safety, reviews, the "You might also like" rail and
+                        // the developer link — the Play surfaces this shell was
+                        // missing. All read the same Classic data the Classic shell
+                        // reads, so the two agree.
+                        playBadges = remember(classicRepo.id, classicState.listingMeta[classicRepo.id]) {
+                            badgesFor(classicRepo, classicState.listingMeta[classicRepo.id])
+                        },
+                        listingMeta = classicState.listingMeta[classicRepo.id],
+                        autoUpdateEnabled = appViewModel.isAutoUpdateEnabled(classicRepo),
+                        onToggleAutoUpdate = { appViewModel.setAutoUpdate(classicRepo, it) },
+                        isPreRegistered = appViewModel.isPreRegistered(classicRepo),
+                        onTogglePreRegister = {
+                            appViewModel.togglePreRegister(
+                                classicRepo,
+                                classicInstall?.release?.tag_name.orEmpty(),
+                            )
+                        },
+                        similarApps = remember(classicRepo.id) { appViewModel.similarApps(classicRepo) },
+                        onOpenSimilar = { repo ->
+                            viewModel.select(repo.toAppItem())
+                            appViewModel.addToHistory(repo)
+                        },
+                        onOpenDeveloper = { login ->
+                            appViewModel.openDeveloper(login)
+                            subScreen = SubScreen.Developer
+                        },
                         isHidden = effectiveItem.packageName in settings.hiddenPackages,
                         onToggleHidden = {
                             viewModel.setHidden(
@@ -855,6 +930,24 @@ fun ExpressiveShell(
                         onAppClick = { repo -> viewModel.select(repo.toAppItem()) },
                         onCheckUpdates = appViewModel::checkForUpdatesNow,
                         onRollback = appViewModel::rollbackTo,
+                    )
+
+                    // The developer page — every app by one owner. `openDeveloper` has
+                    // already filled Classic's `seeAllApps`, so this is just Classic's
+                    // own list rendered over the detail page. Tapping a row swaps the
+                    // detail underneath, exactly as the "You might also like" rail does.
+                    SubScreen.Developer -> com.vythera.vyxelapps.SeeAllScreen(
+                        title = classicState.seeAllTitle,
+                        apps = classicState.seeAllApps,
+                        installed = classicState.installHistory.map { it.repoId }.toSet(),
+                        isLoading = classicState.isLoadingSeeAll,
+                        useTileColors = true,
+                        onLoadMore = {},
+                        onAppClick = { repo ->
+                            viewModel.select(repo.toAppItem())
+                            appViewModel.addToHistory(repo)
+                        },
+                        onBack = { subScreen = SubScreen.None },
                     )
 
                     SubScreen.None -> Unit

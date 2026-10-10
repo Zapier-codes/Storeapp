@@ -45,6 +45,8 @@ val SourceId.brandColor: Color
         SourceId.Codeberg -> SourceColors.Codeberg
         SourceId.Flathub -> SourceColors.Flathub
         SourceId.WinGet -> SourceColors.WinGet
+        SourceId.Zealot -> SourceColors.Zealot
+        SourceId.DStore -> SourceColors.DStore
         SourceId.Aurora -> SourceColors.Aurora
         SourceId.Aptoide -> SourceColors.Aptoide
         SourceId.ApkPure -> SourceColors.ApkPure

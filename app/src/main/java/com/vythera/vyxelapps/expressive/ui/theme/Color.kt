@@ -170,6 +170,18 @@ object SourceColors {
     /** Aurora's own aurora-green. */
     val Aurora = Color(0xFF32C48D)
 
+    /**
+     * Our own signed store.
+     *
+     * Deliberately distinct from GitHub's grey and F-Droid's blue: an entry from here
+     * is the one the reader can actually vouch for (signed index, checksum and signer
+     * claims), so it should not read as "another mirror".
+     */
+    val Zealot = Color(0xFF6C5CE7)
+
+    /** D-Store's own brand colour, distinct from Zealot's so the two first-party stores read apart. */
+    val DStore = Color(0xFFB8942E)
+
     // Modules read as one family on screen, so both repos share a hue and are told
     // apart by the badge text rather than by colour.
     val MagiskAlt = Color(0xFF9B6BDF)

@@ -151,7 +151,9 @@ The files that diverge most from upstream, so any future upstream merge is manua
    `SettingsStore.kt`, `ClassicBridge.kt`, `.../core/net/Net.kt`, and
    `FederatedCatalogClient` as the first source. Reconcile-review only.
 6. **j.vii — Expressive shell and screens.** Merged (`expressive/ui/*`); the `UiStyle`
-   switch is exposed in Settings. Review only.
+   switch is exposed in Settings. **Corrected 2026-10-10: not review only.** The shell has
+   no Zealot or D-Store source, and its install path did not run `Verifier`. Cut into
+   j.vii.a (verification, done) to j.vii.d in `HANDOVER.md`.
 7. **j.viii — Direct sources / Sources / Modules screens.** Blocked on decision (a).
 8. **j.ix — Update scanners.** Present (`updater/UpdateScanEngine.kt`); reconcile only.
 9. **j.x — Installers (Shizuku/root).** Present, off by default; blocked on decision (b)

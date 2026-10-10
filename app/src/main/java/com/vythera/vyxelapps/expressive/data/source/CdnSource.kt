@@ -117,6 +117,11 @@ class CdnSource(context: Context) {
             // lookup off to fetch a 404.
             SourceId.Aurora, SourceId.Aptoide, SourceId.ApkPure,
             SourceId.MagiskAlt, SourceId.Googlers,
+            // j.vii.b: our own store is not in the CDN index either — it answers from the
+            // signed Zealot index in one request, so there is nothing to pre-warm here.
+            SourceId.Zealot,
+            // j.vii.c: D-Store's catalog is a live API, not part of the CDN build.
+            SourceId.DStore,
             SourceId.XposedRepo, SourceId.MagiskLegacy -> return null
         }
         return "$src:$pkg"

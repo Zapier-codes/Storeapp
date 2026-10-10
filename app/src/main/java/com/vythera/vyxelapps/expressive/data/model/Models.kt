@@ -74,6 +74,28 @@ enum class SourceId(
     WinGet("WinGet", Platform.Windows),
 
     /**
+     * Our own signed store, read from Zealot's verified catalog index.
+     *
+     * The index is Ed25519-signed and pinned per device (`ZealotTrust`), and this is the
+     * same source Classic's `zealotApps` reads, so an app published through Zealot shows
+     * here exactly as it does there — carrying the checksum and signing-fingerprint
+     * claims that make j.vii.a's verify step real rather than a no-op.
+     */
+    Zealot("Zealot", Platform.Android),
+
+    /**
+     * D-Store's public catalog, our other first-party store.
+     *
+     * Browse-only and **never installable** (operator decision 5a/5b): D-Store's
+     * `/api/catalog` is unsigned, so a row carries no checksum and no signing
+     * fingerprint to verify a download against. [DStoreApp.toAppItem] therefore leaves
+     * `downloadUrl` null, and the install button reads Unavailable — the reader can
+     * look, not install from here until that decision changes. Classic reaches the same
+     * catalog through its own browse view.
+     */
+    DStore("D-Store", Platform.Android),
+
+    /**
      * Aurora OSS's own build server.
      *
      * A small, hand-maintained set — Aurora Store, AuroraDroid, AppWarden — served
@@ -208,6 +230,13 @@ data class AppItem(
      * release hasn't been resolved yet. Detail screen resolves it lazily.
      */
     val needsReleaseLookup: Boolean = false,
+    /**
+     * Track j.vii.a: what the SOURCE published about the file, for a source whose catalogue is signed (Zealot's
+     * index). Null for every source that has never published one. When set, the install path compares the
+     * downloaded file with them before Android's installer sees it ([com.vythera.vyxelapps.api.VerifierPolicy]).
+     */
+    val claimedSha256: String? = null,
+    val claimedSigningFingerprint: String? = null,
 ) {
     val platform: Platform get() = source.platform
 

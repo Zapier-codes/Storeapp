@@ -8,6 +8,7 @@ import com.vythera.vyxelapps.iconUrlOrNull
 import com.vythera.vyxelapps.UpdateInfo
 import com.vythera.vyxelapps.expressive.data.model.AppItem
 import com.vythera.vyxelapps.expressive.data.model.SourceId
+import com.vythera.vyxelapps.api.DStoreApp
 import com.vythera.vyxelapps.expressive.data.source.epochMillisToIso
 import com.vythera.vyxelapps.expressive.data.source.isoToEpochMillis
 import com.vythera.vyxelapps.updater.AppScanResult
@@ -32,6 +33,11 @@ fun AppSource?.toSourceId(): SourceId = when (this) {
     AppSource.FLATHUB -> SourceId.Flathub
     AppSource.WINGET -> SourceId.WinGet
     AppSource.APTOIDE -> SourceId.Aptoide
+    // j.vii.b: our own signed store. Classic already loads it (`zealotApps`), so the two
+    // shells land on the same `SourceId` for the same app.
+    AppSource.ZEALOT -> SourceId.Zealot
+    // j.vii.c: Classic's D-Store value (its browse view and installed-list records).
+    AppSource.DSTORE -> SourceId.DStore
     // Classic collapses the four module repositories into one source value; the
     // Alt Repo is the safest landing spot because it is the one whose entries
     // carry a real zip url without a further lookup.
@@ -97,6 +103,7 @@ fun AppScanResult.toAppItem(): AppItem = AppItem(
     changelog = whatsNew.takeIf { it.isNotBlank() },
 )
 
+
 /** Expressive's source enum -> Classic's. */
 fun SourceId.toAppSource(): AppSource = when (this) {
     SourceId.FDroid -> AppSource.FDROID
@@ -105,6 +112,12 @@ fun SourceId.toAppSource(): AppSource = when (this) {
     SourceId.Codeberg -> AppSource.CODEBERG
     SourceId.Flathub -> AppSource.FLATHUB
     SourceId.WinGet -> AppSource.WINGET
+    // j.vii.b: back to Classic's own source value so an install of a Zealot card routes
+    // through the same gateway and record as Classic's own Zealot entries.
+    SourceId.Zealot -> AppSource.ZEALOT
+    // j.vii.c: Classic's own D-Store value. Browse-only, so this only matters for the
+    // badge and for any id/route that keys on the source.
+    SourceId.DStore -> AppSource.DSTORE
     SourceId.Aptoide, SourceId.ApkPure -> AppSource.APTOIDE
     SourceId.MagiskAlt, SourceId.Googlers,
     SourceId.XposedRepo, SourceId.MagiskLegacy -> AppSource.MODULE
@@ -146,6 +159,22 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
         ?.takeIf { classicSource == AppSource.GITHUB }
         ?.toLongOrNull()
         ?.takeIf { it > 0 }
+    /**
+     * j.vii.b: a Zealot card carries its id in Classic's `ZEALOT_ID_OFFSET` bucket, so the
+     * two shells key `installStates`, the release cache and `StoreUpdateChecker` on the same
+     * number for the same app. Reused verbatim, the same way GitHub's numeric id is.
+     */
+    val zealotRepoId = id.substringAfter(':', "")
+        .toLongOrNull()
+        ?.takeIf { source == SourceId.Zealot && it >= com.vythera.vyxelapps.api.ZEALOT_ID_OFFSET }
+    /**
+     * j.vii.c: a D-Store card carries its id in Classic's `DSTORE_ID_OFFSET` bucket (the same
+     * `dstoreRepoId(slug)` number Classic's own D-Store rows use), reused verbatim so the two
+     * shells key `installStates` and the release cache on the same entry.
+     */
+    val dstoreRepoId = id.substringAfter(':', "")
+        .toLongOrNull()
+        ?.takeIf { source == SourceId.DStore && it >= com.vythera.vyxelapps.api.DSTORE_ID_OFFSET }
     val offset = when (source) {
         SourceId.GitLab -> 9_000_000_000L
         SourceId.Codeberg -> 8_000_000_000L
@@ -153,6 +182,15 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
         SourceId.Flathub -> 6_000_000_000L
         SourceId.WinGet -> 5_000_000_000L
         SourceId.IzzyOnDroid -> 4_000_000_000L
+        // j.vii.b: Zealot is `AppSource.ZEALOT`, which Classic keys `installStates` and its
+        // release cache on by `ZEALOT_ID_OFFSET` (its own bucket). A synthesised id that never
+        // lands there would put the two shells on different entries for the same app, so a
+        // Zealot card carries Classic's real id from the source and never reaches this branch.
+        // Own band kept anyway so an id synthesised from something malformed can't collide.
+        SourceId.Zealot -> 30_000_000_000L
+        // j.vii.c: above `DSTORE_ID_OFFSET`, so even a synthesised D-Store id stays in D-Store's
+        // bucket and `isDStoreRepoId` still recognises it. A real card never reaches here.
+        SourceId.DStore -> 21_000_000_000L
         // Own bands so a synthesised id can never land on a real GitHub repo id,
         // which is the one source whose ids are used verbatim.
         SourceId.Aptoide, SourceId.ApkPure -> 3_000_000_000L
@@ -168,6 +206,8 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
         SourceId.Codeberg -> "codeberg"
         SourceId.Flathub -> "flathub"
         SourceId.WinGet -> "winget"
+        SourceId.Zealot -> "zealot"
+        SourceId.DStore -> "dstore"
         SourceId.Aptoide -> "aptoide"
         SourceId.ApkPure -> "apkpure"
         SourceId.Aurora -> "aurora"
@@ -199,7 +239,8 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
     val repoSlug = urlParts?.get(1) ?: name
 
     return GitHubRepo(
-        id = githubRepoId ?: (kotlin.math.abs("$sourceKey:$key".hashCode()).toLong() + offset),
+        id = zealotRepoId ?: dstoreRepoId ?: githubRepoId
+            ?: (kotlin.math.abs("$sourceKey:$key".hashCode()).toLong() + offset),
         // The host's own repo name, not the catalog's display label.
         name = if (source.isRepoHost) repoSlug else name,
         // GitHub/GitLab/Codeberg release lookups are keyed by "owner/repo", which for
@@ -232,6 +273,10 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
         // response. Classic has no release asset to read one from for these, so
         // without this the detail page prints "0 B".
         apkSize = sizeBytes,
+        // j.vii.a: a claim the source published travels with the card, so Classic's engines
+        // (InstallGateway) check it too when the detail screen drives the install.
+        claimedSha256 = claimedSha256,
+        claimedSigningFingerprint = claimedSigningFingerprint,
         // The first category, which for a module is its family — Magisk, Zygisk,
         // LSPosed or KernelSU. `language` is the only free-text field on GitHubRepo
         // that nothing else needs, and Classic's module screen filters on it.
@@ -252,6 +297,40 @@ fun AppItem.toGitHubRepo(): GitHubRepo {
 data class ScanRow(val item: AppItem, val hasUpdate: Boolean)
 
 fun AppScanResult.toScanRow(): ScanRow = ScanRow(toAppItem(), hasUpdate)
+
+/**
+ * Renders a D-Store catalog row as an Expressive card — leaf j.vii.c.
+ *
+ * Pure, so a JVM test can drive it. Browse-only: `downloadUrl` is deliberately left
+ * `null`, because D-Store's `/api/catalog` is unsigned and a row carries nothing to
+ * verify a download against (operator decision 5a/5b). `installAction` therefore reads
+ * Unavailable, and the card can be opened and read but never installed.
+ *
+ * The id is the same `dstoreRepoId(slug)` bucket Classic's own D-Store rows use, so a
+ * card here and one in Classic are the same entry to anything keying on the id.
+ */
+fun DStoreApp.toAppItem(): AppItem {
+    val displayName = name.trim().ifEmpty { slug }
+    val pkg = package_name.trim().takeIf { it.isNotEmpty() }
+    return AppItem(
+        id = "${SourceId.DStore.name}:${com.vythera.vyxelapps.api.dstoreRepoId(slug)}",
+        source = SourceId.DStore,
+        name = displayName,
+        summary = summary.trim(),
+        description = summary.trim(),
+        iconUrl = icon?.takeIf { it.startsWith("https://") },
+        packageName = pkg,
+        version = version.trim().takeIf { it.isNotBlank() },
+        updatedAt = updated_at.isoToEpochMillis(),
+        author = developer_name.trim().takeIf { it.isNotBlank() },
+        license = license.trim().takeIf { it.isNotBlank() },
+        categories = listOfNotNull(category.trim().takeIf { it.isNotBlank() }),
+        // Browse-only: no URL, so the card is never installable.
+        downloadUrl = null,
+        sizeBytes = (size_mb * 1024 * 1024).toLong(),
+    )
+}
+
 
 /**
  * Renders a tracked-release update as an Expressive card.
@@ -314,7 +393,7 @@ private fun installSourceToSourceId(raw: String?): SourceId =
     }
 
 /** Best-effort mapping of the updater's source label onto a catalog source. */
-private fun scanSourceToSourceId(source: UpdaterSource): SourceId =
+internal fun scanSourceToSourceId(source: UpdaterSource): SourceId =
     when (source.name.lowercase().replace("-", "").replace("_", "")) {
         "fdroid", "fdroidupdatersource" -> SourceId.FDroid
         "izzy", "izzyupdatersource", "izzyondroid" -> SourceId.IzzyOnDroid
@@ -328,5 +407,9 @@ private fun scanSourceToSourceId(source: UpdaterSource): SourceId =
         // provenance the reader most wants to check.
         "aptoide" -> SourceId.Aptoide
         "apkpure" -> SourceId.ApkPure
+        // j.vii.d: a store row comes from the shared store check, badged as the store it
+        // came from rather than as a repo.
+        "zealot", "zealotupdatersource" -> SourceId.Zealot
+        "dstore", "dstoreupdatersource" -> SourceId.DStore
         else -> SourceId.GitHub
     }

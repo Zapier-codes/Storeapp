@@ -18,6 +18,8 @@ import com.vythera.vyxelapps.expressive.data.source.AuroraSource
 import com.vythera.vyxelapps.expressive.data.source.ModuleRepoFormat
 import com.vythera.vyxelapps.expressive.data.source.ModuleRepoSource
 import com.vythera.vyxelapps.expressive.data.source.WingetSource
+import com.vythera.vyxelapps.expressive.data.source.ZealotSource
+import com.vythera.vyxelapps.expressive.data.source.DStoreSource
 import com.vythera.vyxelapps.expressive.data.source.SearchDoc
 import com.vythera.vyxelapps.expressive.data.source.normalizeText
 import com.vythera.vyxelapps.expressive.data.source.relevanceScore
@@ -169,6 +171,10 @@ class CatalogRepository(
         SourceId.Codeberg to CodebergSource(),
         SourceId.Flathub to flathub,
         SourceId.WinGet to WingetSource(),
+        // j.vii.b: our own signed store, at the same tier as Classic's `zealotApps`.
+        SourceId.Zealot to ZealotSource(context),
+        // j.vii.c: D-Store's public catalog. Browse-only (unsigned), never installable.
+        SourceId.DStore to DStoreSource(),
         SourceId.Aurora to AuroraSource(),
         SourceId.Aptoide to AptoideSource(),
         // Root modules, from the two indexes that publish real metadata. Same
@@ -245,6 +251,8 @@ class CatalogRepository(
 
     /** Order rails appear in once they've loaded, regardless of who finishes first. */
     private val railOrder = listOf(
+        SourceId.Zealot,
+        SourceId.DStore,
         SourceId.FDroid, SourceId.IzzyOnDroid, SourceId.GitHub,
         SourceId.Aptoide, SourceId.Codeberg, SourceId.GitLab, SourceId.Aurora,
         SourceId.Flathub, SourceId.WinGet,
@@ -346,6 +354,10 @@ class CatalogRepository(
         .flowOn(Dispatchers.Default)
 
     private fun railFor(id: SourceId, items: List<AppItem>): AppRail = when (id) {
+        SourceId.Zealot ->
+            AppRail("From our store", "Published and signed through Zealot", id, items)
+        SourceId.DStore ->
+            AppRail("More from D-Store", "Listings from our web store", id, items)
         SourceId.FDroid ->
             AppRail("Fresh on F-Droid", "Just updated in the main repo", id, items)
         SourceId.IzzyOnDroid ->
@@ -767,6 +779,11 @@ class CatalogRepository(
      * have already done that filtering, so they skip the penalty entirely.
      */
     private fun qualityMultiplier(item: AppItem): Float = when (item.source) {
+        // Our own signed index: the only source whose entries the store itself vouches for.
+        SourceId.Zealot -> 2.0f
+        // Our other first-party store, but unsigned and uninstallable, so below the curated
+        // mirrors: it should never outrank a copy the reader could actually install.
+        SourceId.DStore -> 1.2f
         // Reviewed, packaged, installable, real metadata.
         SourceId.FDroid -> 1.9f
         SourceId.IzzyOnDroid -> 1.75f
@@ -829,6 +846,11 @@ class CatalogRepository(
     }
 
     private fun sourceRank(id: SourceId): Int = when (id) {
+        // j.vii.b: our own store wins dedupe against every mirror of the same app. j.vii.c:
+        // D-Store ranks below them, since its row cannot be installed -- a mirror's
+        // installable copy should win.
+        SourceId.Zealot -> -1
+        SourceId.DStore -> 13
         SourceId.FDroid -> 0
         SourceId.IzzyOnDroid -> 1
         SourceId.GitHub -> 2

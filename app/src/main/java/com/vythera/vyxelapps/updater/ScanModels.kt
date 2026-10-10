@@ -18,6 +18,16 @@ val GitLabUpdaterSource  = UpdaterSource("GitLab")
 val ApkPureUpdaterSource = UpdaterSource("APKPure")
 val AptoideUpdaterSource = UpdaterSource("Aptoide")
 
+/**
+ * Our own stores — j.vii.d.
+ *
+ * A store row is not produced by any repo scan; it comes from the shared `StoreUpdateChecker`
+ * and carries an app we publish. The names here are what [scanSourceToSourceId] maps back to
+ * the matching `SourceId`, so a store row is badged and routed as a store app, never a repo.
+ */
+val ZealotUpdaterSource  = UpdaterSource("Zealot")
+val DStoreUpdaterSource  = UpdaterSource("D-Store")
+
 // ── Download link ─────────────────────────────────────────────────────────────
 
 sealed class ScanLink {
@@ -51,6 +61,36 @@ data class ScannedApp(
 )
 
 // ── List helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Builds a scan row for an app we publish, from the shared store check — leaf j.vii.d.
+ *
+ * Track h's rule: an app that came from our own stores is never looked up on a repo. Its
+ * installed version comes from the device and its available version from the store's own
+ * index, which is exactly what [AppScanResult] carries. Pure, so a JVM test drives it.
+ * [link] is set only for an installable (signed Zealot) update, so a D-Store row has no
+ * download link to offer — decision 5a/5b.
+ */
+fun storeScanResult(
+    packageName: String,
+    appName: String,
+    currentVersion: String,
+    newVersion: String,
+    source: UpdaterSource,
+    iconUrl: String = "",
+    link: ScanLink = ScanLink.Empty,
+    whatsNew: String = "",
+): AppScanResult = AppScanResult(
+    appName = appName.ifBlank { packageName },
+    packageName = packageName,
+    currentVersion = currentVersion,
+    newVersion = newVersion,
+    source = source,
+    iconUrl = iconUrl,
+    link = link,
+    whatsNew = whatsNew,
+    hasUpdate = true,
+)
 
 fun List<ScannedApp>.getApp(pkg: String)         = find { it.packageName == pkg }
 fun List<ScannedApp>.getVersionCode(pkg: String) = getApp(pkg)?.versionCode ?: 0L

@@ -3,6 +3,10 @@ package com.vythera.vyxelapps.updater
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
+import com.vythera.vyxelapps.PreferencesManager
+import com.vythera.vyxelapps.InstallHistoryEntry
+import com.vythera.vyxelapps.api.StoreUpdateChecker
+import com.vythera.vyxelapps.api.isStoreRepoId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -139,7 +143,11 @@ class UpdateScanEngine(
                     githubRepo.updates(apps, additionalGitHubApps).onStart { emit(emptyList()) }.catch { emit(emptyList()) },
                     gitlabRepo.updates(apps).onStart { emit(emptyList()) }.catch { emit(emptyList()) },
                     aptoideRepo.updates(apps).onStart { emit(emptyList()) }.catch { emit(emptyList()) },
-                    apkPureRepo.updates(apps).onStart { emit(emptyList()) }.catch { emit(emptyList()) }
+                    apkPureRepo.updates(apps).onStart { emit(emptyList()) }.catch { emit(emptyList()) },
+                    // j.vii.d: apps we publish are checked against the store's own index through
+                    // the one shared check (Track h), never a repo lookup -- the same routing
+                    // checkForUpdatesNow()/updateAll()/UpdateCheckWorker use.
+                    storeUpdates(apps).onStart { emit(emptyList()) }.catch { emit(emptyList()) }
                 )
                 sources.combineFlows { all ->
                     // Per package, keep only the entry with the highest newVersion so that
@@ -175,4 +183,45 @@ class UpdateScanEngine(
         Log.e("UpdateScanEngine", "Scan failed", it)
         emit(emptyList())
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * The store-first update rows — leaf j.vii.d.
+     *
+     * Only apps our own stores published (their `GitHubRepo.id` is in a store bucket) are
+     * asked about, and each installed app's version is matched by package name to the device's
+     * own list, never a repo. [StoreUpdateChecker] returns the available version from the
+     * store's index; an installable (signed Zealot) update carries its download link, a
+     * D-Store-only row carries none (decision 5a/5b). Nothing here falls through to GitHub.
+     */
+    private fun storeUpdates(apps: List<ScannedApp>): Flow<List<AppScanResult>> = flow {
+        val history: List<InstallHistoryEntry> =
+            PreferencesManager(context).loadInstallHistory().distinctBy { it.repoId }
+        val storeEntries = history.filter { isStoreRepoId(it.repoId) }
+        if (storeEntries.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
+        val installedByName = apps.associateBy { it.packageName }
+        val updates = runCatching { StoreUpdateChecker(context).check(storeEntries) }
+            .getOrDefault(emptyList())
+        emit(
+            updates.mapNotNull { update ->
+                val pkg = history.firstOrNull { it.repoId == update.repoId }
+                    ?.packageName?.trim().orEmpty()
+                if (pkg.isEmpty()) return@mapNotNull null
+                val installed = installedByName[pkg] ?: return@mapNotNull null
+                val installable = update.installable && update.apkUrl.isNotBlank()
+                storeScanResult(
+                    packageName    = pkg,
+                    appName        = installed.name,
+                    currentVersion = installed.version,
+                    newVersion     = update.latestTag,
+                    source         = if (update.installable) ZealotUpdaterSource else DStoreUpdaterSource,
+                    iconUrl        = "",
+                    link           = if (installable) ScanLink.Url(update.apkUrl) else ScanLink.Empty,
+                    whatsNew       = update.changelog,
+                )
+            }
+        )
+    }
 }

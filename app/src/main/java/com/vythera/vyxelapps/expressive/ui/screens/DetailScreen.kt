@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -139,6 +140,22 @@ fun DetailScreen(
     onDownloadZip: () -> Unit = {},
     /** Flashes the module through the device's own root manager. */
     onInstallModule: () -> Unit = {},
+    // ── Play-parity (docs/PLAY-PARITY.md) ────────────────────────────────────
+    /** Derived/publisher badges for this listing (`badgesFor`). */
+    playBadges: List<com.vythera.vyxelapps.ListingBadge> = emptyList(),
+    /** CDN `listing.json` for this app, when one exists. Drives rating/reviews. */
+    listingMeta: com.vythera.vyxelapps.AppListingMeta? = null,
+    /** Per-app auto-update switch state and its toggle. */
+    autoUpdateEnabled: Boolean = true,
+    onToggleAutoUpdate: (Boolean) -> Unit = {},
+    /** Pre-register state and its toggle (Android only). */
+    isPreRegistered: Boolean = false,
+    onTogglePreRegister: () -> Unit = {},
+    /** "You might also like", scored over the in-memory catalogue. */
+    similarApps: List<com.vythera.vyxelapps.GitHubRepo> = emptyList(),
+    onOpenSimilar: (com.vythera.vyxelapps.GitHubRepo) -> Unit = {},
+    /** Opens the developer page for this app's owner login. */
+    onOpenDeveloper: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val accents = LocalVyxelAccents.current
@@ -226,6 +243,25 @@ fun DetailScreen(
                                 }
                             }
                         }
+                    }
+
+                    // Play-parity (docs/PLAY-PARITY.md): the derived/publisher
+                    // badges and the rating line the Play listing carries under the
+                    // title. Both read real data only — a badge we can derive from
+                    // fields we hold, or one the publisher put in `listing.json`.
+                    if (playBadges.isNotEmpty()) {
+                        com.vythera.vyxelapps.ListingBadgesRow(
+                            badges = playBadges,
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    Box(Modifier.padding(horizontal = 24.dp)) {
+                        com.vythera.vyxelapps.PlayRatingRow(
+                            meta = listingMeta,
+                            fallbackInstalls = item.stars.takeIf { it > 0 }
+                                ?.let { formatCount(it.toLong()) + " stars" } ?: "",
+                        )
                     }
 
                     Spacer(Modifier.height(20.dp))
@@ -343,6 +379,26 @@ fun DetailScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // Play-parity: per-app auto-update (real, honoured by the update checker)
+        // and pre-register. Auto-update shows for every Android app; pre-register
+        // only where there is a next release to reserve, which is what the switch
+        // means on Play. Rendered above the screenshots so it reads as part of the
+        // listing header rather than buried at the bottom.
+        if (item.platform == Platform.Android) {
+            item(key = "playLifecycle") {
+                com.vythera.vyxelapps.PlayLifecycleControls(
+                    autoUpdateEnabled = autoUpdateEnabled,
+                    onToggleAutoUpdate = onToggleAutoUpdate,
+                    isPreRegistered = isPreRegistered,
+                    onTogglePreRegister = onTogglePreRegister,
+                    // Only meaningful once a release exists to reserve past — the
+                    // same rule Classic's own detail page uses.
+                    showPreRegister = releases.isNotEmpty(),
+                )
+                Spacer(Modifier.height(14.dp))
             }
         }
 
@@ -566,11 +622,45 @@ fun DetailScreen(
             item(key = "versionsTail") { Spacer(Modifier.height(22.dp)) }
         }
 
+        // Play-parity: Data Safety (live permissions when installed, publisher
+        // claims from `listing.json` otherwise) and the ratings/reviews block.
+        // Both render nothing rather than an empty reassuring panel when there is
+        // no data — see their own notes in PlaySurfaces.kt.
+        item(key = "dataSafety") {
+            com.vythera.vyxelapps.DataSafetyPanel(
+                meta = listingMeta,
+                livePermissions = emptyList(),
+                isInstalled = installAction == InstallAction.Open ||
+                    installAction == InstallAction.Update,
+            )
+        }
+
+        item(key = "reviews") {
+            com.vythera.vyxelapps.ReviewsPanel(meta = listingMeta)
+        }
+
+        // Play-parity: "You might also like", scored over the in-memory catalogue.
+        if (similarApps.isNotEmpty()) {
+            item(key = "similar") {
+                com.vythera.vyxelapps.PlaySectionDivider()
+                com.vythera.vyxelapps.SimilarAppsRail(
+                    apps = similarApps,
+                    onAppClick = onOpenSimilar,
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+
         item(key = "links") {
             Column(
                 Modifier.padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                item.author?.takeIf { it.isNotBlank() }?.let { dev ->
+                    LinkRow(Icons.Filled.Person, "More from $dev", "https://github.com/$dev") {
+                        onOpenDeveloper(dev)
+                    }
+                }
                 item.website?.let {
                     LinkRow(Icons.Filled.Language, xs.website, it) { onOpenUrl(it) }
                 }
