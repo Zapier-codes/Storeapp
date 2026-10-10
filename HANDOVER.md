@@ -452,6 +452,8 @@ falls back to the default (same `prop()` helper as `DSTORE_CATALOG_URL`). Checke
 last-good copy); a later fetch succeeds. Raising the timeouts is a separate decision. (2) The index must verify against
 `PINNED_KEYS` (`ZealotTrust.kt`); if Zealot signs with a different key, the app silently shows no Zealot apps.
 
+**README brought up to date (2026-10-10, docs only, nothing built or run).** `README.md` was still upstream's text: paid Liquid Glass Pro, a Gumroad key, an "only official source" claim and the upstream author's funding links. It now describes this app: the new icon, the typed-out splash, the 2026 home, every theme free (with the honest note that the glass, Cyberpunk and Neon Punk palettes are still stock until j.xi), both shells, Zealot-first verified installs, self-update, the Play-parity surfaces and Android 14 update ownership, and it links `docs/RELEASING.md`, `docs/PLAY-PARITY.md` and `NOTICE`. **Not done:** the screenshots in `docs/` are older than the new home, splash and themes and say so in the README; replace them from a device (leaf j.xiii is the device test). Source count is not stated as a number because the Direct sources screen (j.viii) is still blocked on the operator.
+
 ## 3. Handoff process
 
 Same as D-Store's — but inlined here in full, not just referenced, because a

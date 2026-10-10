@@ -5,9 +5,9 @@
 
 # APPSTORE
 
-<sub>Built on the open-source Vyxel Apps client by NikhilKain (AGPL-3.0). The store name shown in the app is set per tenant, not hardcoded.</sub>
+<sub>Derived from the open-source Vyxel Apps client by NikhilKain (AGPL-3.0); see <a href="NOTICE">NOTICE</a>. The store name shown in the app is set per tenant, not hardcoded.</sub>
 
-<img src="https://readme-typing-svg.demolab.com/?font=Space+Grotesk&weight=700&size=20&duration=3000&pause=1200&color=5FF5D3&center=true&vCenter=true&width=680&lines=Every+store%2C+one+place;F-Droid%2C+GitHub%2C+Google+Play%2C+TapTap+%26+14+more;Works+offline+%C2%B7+Zero+ads+%C2%B7+Zero+bloat" alt="typing tagline" width="680" height="40"/>
+<img src="https://readme-typing-svg.demolab.com/?font=Space+Grotesk&weight=700&size=20&duration=3000&pause=1200&color=5FF5D3&center=true&vCenter=true&width=680&lines=Every+store%2C+one+place;Zealot+first%2C+then+F-Droid%2C+GitHub%2C+Aptoide+%26+more;Updates+itself+%C2%B7+Every+theme+free+%C2%B7+Zero+ads" alt="typing tagline" width="680" height="40"/>
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:4390FF,50:5FF5D3,100:C5E6FB&height=90&section=header&animation=fadeIn" width="100%" height="90" alt="divider"/>
 
@@ -23,7 +23,7 @@
 
 [![What's New](https://img.shields.io/badge/What's_New-4390FF?style=for-the-badge&labelColor=0B1D4F)](#whats-new)
 [![Features](https://img.shields.io/badge/Features-5FF5D3?style=for-the-badge&labelColor=0B1D4F&logoColor=0B1D4F)](#features)
-[![Pro Themes](https://img.shields.io/badge/Pro_Themes-4390FF?style=for-the-badge&labelColor=0B1D4F)](#liquid-glass-pro)
+[![Themes](https://img.shields.io/badge/Themes-4390FF?style=for-the-badge&labelColor=0B1D4F)](#themes)
 [![Screenshots](https://img.shields.io/badge/Screenshots-5FF5D3?style=for-the-badge&labelColor=0B1D4F)](#screenshots)
 [![Install](https://img.shields.io/badge/Install-4390FF?style=for-the-badge&labelColor=0B1D4F)](#installation)
 [![Tech Stack](https://img.shields.io/badge/Tech_Stack-5FF5D3?style=for-the-badge&labelColor=0B1D4F)](#tech-stack)
@@ -33,21 +33,23 @@
 
 ---
 
-> ⚠️ **Official Source Notice**
-> The ONLY official source for Appstore is this repository.
-> APKs from any other website, Telegram channel, or source are
-> unofficial and may be tampered with. Always verify the signature.
+> ⚠️ **Where to get it**
+> Download Appstore from this repository's [Releases](https://github.com/Zapier-codes/Storeapp/releases)
+> or from the Zealot-hosted website. APKs from anywhere else are unofficial and may be tampered with.
+> Always verify the signature (see [Installation](#installation)).
 
 <a id="whats-new"></a>
-## 🆕 New in v1.1.2 — Bedrock
+## 🆕 What's new
 
-- **📴 Works offline.** An offline catalogue keeps every source's app list on your phone, so browsing and search work with no connection and answer before the network does. It syncs once a day, incrementally, on Wi-Fi by default, within a storage limit you choose, and never spends the GitHub quota you need.
-- **🧰 Developer repos.** The F-Droid repositories Droid-ify and Neo Store ship with — Bitwarden, NewPipe, microG, Guardian Project, Molly, Session, Threema and more — with builds signed by the projects themselves.
-- **🎮 TapTap.** Game charts and search, installed from Google Play or Aptoide when a verified build exists.
-- **⬇️ Download APK** on every app page, and installed apps, updates and tracked apps now open to a real file instead of "No APK".
-- **A new icon**, and the launch crash some phones hit on 1.1.1 fixed for real.
+- **A new look.** New brand icon (three rounded facets in blue, mint and ice on deep navy), a new launch splash that types the name **Appstore** out under the icon, and a **2026 home**: a full-bleed hero carousel, image-tile collections and a flat "Recommended for you" list. The old first-run GitHub-token page is gone; the token is an optional setting and Home works without it.
+- **Every theme is free.** Liquid Glass Dark and Light, Cyberpunk and Neon Punk sit beside Light, Dark, Minimal, AMOLED, Sunset and Custom, with no key, payment or network check. See [Themes](#themes).
+- **Two interfaces.** The classic four-tab dock, or the Expressive shell with five tabs (Home, Search, Updates, Sources, Settings). Switch in Settings.
+- **Zealot first.** The signed Zealot catalog is the first source in both interfaces, and every download is checked (SHA-256 and signing certificate) before it installs. D-Store is browse-only.
+- **It updates itself.** The store checks the signed index, downloads its own update in the app, verifies it, and installs it through a `PackageInstaller` session, with Install, Retry and Cancel on the banner.
+- **Play-style listings.** Badges, a rating line, per-app auto-update, pre-register, Data Safety, reviews, a developer page, a similar-apps rail, and search sort and filters. A rating or review only appears when the publisher supplies one; nothing is invented. See [docs/PLAY-PARITY.md](docs/PLAY-PARITY.md).
+- **Update ownership on Android 14+.** Apps installed here ask Android to make this store their update owner, so another installer needs your confirmation to replace them. Best effort; an install never fails on it.
 
-[Full release notes →](https://github.com/NikhilKain/vyxel-apps/releases)
+Build status, per-leaf notes and what has and has not been tested on a device are in [HANDOVER.md](HANDOVER.md).
 
 <a id="features"></a>
 ## ✨ Features
@@ -56,116 +58,74 @@
 <tr>
 <td width="50%" valign="top">
 
-**🔍 18 sources, one store**
-F-Droid, IzzyOnDroid, the developers' own F-Droid repos, GitHub, GitLab, Codeberg, Google Play, Aptoide, TapTap, Aurora OSS, APKPure, patched apps, Flathub and WinGet, plus four root-module repositories — searched and merged into a single feed.
+**🔍 Many sources, one store**
+Zealot (first), F-Droid, IzzyOnDroid, GitHub, GitLab, Codeberg, Aptoide, APKPure, Aurora OSS, Flathub and WinGet, plus root-module repositories, merged into a single feed. D-Store is browse-only.
 
 **📴 Works offline**
-Every source's app list is kept on the phone. Browse and search with no connection; online, search answers from disk before the network does.
+Source lists are kept on the phone. Browse and search with no connection; online, search answers from disk before the network does.
 
-**🗂 17 curated categories**
-Games, Productivity, Security, Dev Tools, Media, Finance and more, plus smart sections like Trending and Newly Launched.
+**🛡 Verification before every install**
+A downloaded file is checked against the index's SHA-256 and signing fingerprint, and against the installed app's signing certificate, before it installs. A hijacked repo or redirected release cannot silently overwrite what is on your phone.
 
-**🛡 Signature verification**
-Every downloaded APK is checked against the installed app's signing certificate before install — a hijacked repo or redirected release can't silently overwrite what's on your phone.
+**🔄 Self-update**
+The store updates itself in place, with a banner for Update available, Downloading, Verifying, Ready to install and Failed (Retry).
 
-**🥷 Silent installs via Shizuku**
-Skip the system install confirmation screen entirely when Shizuku is running.
-
-**🛡 Trust Score system**
-0–100 score based on stars, activity, releases, and forks.
+**🥷 Optional silent installs**
+Shizuku and root installs, behind Settings and off by default. Every install still goes through the same verification.
 
 **🔔 Background update monitoring**
-WorkManager checks installed apps against every source and notifies you of updates.
+WorkManager checks installed apps against every source. Switch auto-update off per app and it raises no notification.
 
 </td>
 <td width="50%" valign="top">
 
-**📱 Home screen widget**
-App of the Day plus your pending update count, refreshed every 30 minutes.
+**🏪 Play-style app pages**
+Badges, rating line, Data Safety, reviews, trailer link, developer page, similar apps, pre-register.
+
+**🔎 Search that you can steer**
+Sort and filter the results in both interfaces.
+
+**📱 Today widget**
+App of the Day and your pending update count, refreshed every 30 minutes.
 
 **⬇️ Download APK**
-Save any app's file to Downloads instead of installing it — split installs are saved as the whole set.
+Save any app's file to Downloads instead of installing it; split installs are saved as the whole set.
 
-**📸 Auto-extracted screenshots**
-Pulled straight from each repo's README.
-
-**🔄 Install history & rollback**
-Roll back to a previous version straight from your install history.
-
-**⭐ GitHub starred repos sync**
-Sync your stars into favourites.
+**🔄 Install history and rollback**
+Roll back to a previous version from your install history.
 
 **🌍 16 languages**
 English, Hindi, Spanish, French, German, Japanese, Portuguese, Italian, Russian, Chinese, Korean, Arabic, Dutch, Turkish, Polish, Swedish.
 
 **📢 In-app announcements**
-Dismissible banners for giveaways, releases, and community updates.
+Dismissible banners for releases and community updates.
 
 </td>
 </tr>
 </table>
 
-<a id="open-core"></a>
-## 🧩 Open core
+<a id="themes"></a>
+## 🎨 Themes
 
-Vyxel Apps is **open core**. Everything that makes it an app store is open source under
-AGPL-3.0; a small optional visual pack is not.
+All free, all selectable in **Settings** with no key, payment or network check:
 
-<table>
-<tr>
-<td width="50%" valign="top">
+**Light · Dark · Minimal · AMOLED · Sunset · Custom · Liquid Glass Dark · Liquid Glass Light · Cyberpunk · Neon Punk**
 
-**✅ Open source**
+The two Liquid Glass looks and the Cyberpunk and Neon Punk looks currently use the stock dark and light palettes underneath; their branded palettes and a real glass blur are original work still to come (leaf `j.xi` in [HANDOVER.md](HANDOVER.md)). The Expressive shell also has a skin picker; it ships the Default skin for now.
 
-- All 14 sources and the search, ranking and merge engine
-- Downloads, signature verification, Shizuku installs
-- Update scanning, rollback and install history
-- The Modules screen (Magisk, Zygisk, LSPosed, KernelSU)
-- Both interfaces — Classic and Expressive
-- Trust Score, comparison, backup/restore
-- 16 languages
+<a id="open-source"></a>
+## 🧩 Open source
 
-</td>
-<td width="50%" valign="top">
+Everything in this repository is AGPL-3.0, with nothing behind a paywall: sources, search and merge, downloads, verification, installs, update scanning, rollback, the Modules screen, both interfaces and every theme. Anyone using a build over a network is entitled to its source; this repository is that source.
 
-**💎 Paid build only**
-
-- The four **Liquid Glass Pro** themes and their real-time blur rendering
-- The licence verification and entitlement service
-
-</td>
-</tr>
-</table>
-
-No feature that affects finding, installing, updating or removing an app is behind the
-paywall. The paid part is cosmetic, and it is what funds the rest.
-
-The open core is this repository. Grab the **Source code** archive attached to any
-[release](https://github.com/NikhilKain/vyxel-apps/releases), or clone `main`.
-
-<a id="liquid-glass-pro"></a>
-## 💎 Liquid Glass Pro <sub>(optional)</sub>
-
-<table>
-<tr><td>
-
-Four premium themes — **Liquid Glass Dark**, **Liquid Glass Light**, **Neon Punk**, and **Cyberpunk** — built on real-time backdrop blur, all unlocked with a single license key. A free 30-second preview is available before you buy.
-
-The app is fully usable without it — see [Open core](#open-core) above for exactly what is and isn't included.
-
-<div align="center">
-
-[![Get Liquid Glass Pro](https://img.shields.io/badge/Get_Liquid_Glass_Pro-5FF5D3?style=for-the-badge&logo=gumroad&logoColor=5FF5D3&labelColor=0B1D4F)](https://narzo7.gumroad.com/l/suayy)
-
-</div>
-
-</td></tr>
-</table>
+This app is derived from [Vyxel Apps](https://github.com/NikhilKain/vyxel-apps) by NikhilKain. The upstream copyright line is kept, as the licence requires. Our version numbers are our own (`1.1.x`, from `version.properties`) and are unrelated to upstream's tags; the application id is the same as upstream's, so a phone holds one or the other, and an update across the two needs the same signing key.
 
 <a id="screenshots"></a>
 ## 📱 Screenshots
 
 <div align="center">
+
+> These screenshots were taken before the new home, splash and themes and will be replaced.
 
 <img src="docs/e1.jpg" width="190" height="422" alt="sc1"/> <img src="docs/e2.jpg" width="190" height="422" alt="sc2"/> <img src="docs/e3.jpg" width="190" height="422" alt="sc3"/> <img src="docs/e4.jpg" width="190" height="422" alt="sc4"/>
 
@@ -188,7 +148,9 @@ The app is fully usable without it — see [Open core](#open-core) above for exa
 
 1. Download the latest APK from [Releases](https://github.com/Zapier-codes/Storeapp/releases/latest)
 2. On your Android device: **Settings → Apps → Special access → Install unknown apps** → enable for your browser/file manager
-3. Tap the downloaded APK to install
+3. Tap the downloaded APK to install. On Android 8+ the "Install unknown apps" switch is per app, so it is the browser or file manager you switch on.
+
+To check a build: `apksigner verify --print-certs app-release.apk`.
 
 > 💡 Optional: install [Shizuku](https://shizuku.rikka.app/) for silent, confirmation-free installs of every app you update through Appstore.
 
@@ -201,15 +163,13 @@ git clone https://github.com/Zapier-codes/Storeapp.git
 cd Storeapp
 ```
 
-Open the project in Android Studio (JDK 17, compileSdk 37, targetSdk 36, minSdk 26). It will build and run out of the box — the following `local.properties` keys are all **optional** and only needed to reproduce specific production behavior:
+Open the project in Android Studio (JDK 17, compileSdk 37, targetSdk 36, minSdk 26) or build from the command line:
 
-| Key | Purpose | If omitted |
-|---|---|---|
-| `signing.storeFile` / `storePassword` / `keyAlias` / `keyPassword` | Release signing | Unsigned release APK |
-| `gumroad.product.id` | Liquid Glass Pro license verification | Verification disabled — Pro themes stay locked |
-| `lg.hmac.secret` / `lg.script.url` | Liquid Glass license signing endpoint | N/A in forks |
+```bash
+./gradlew :app:assembleDefaultDebug
+```
 
-Everything else — the six-source scanner, Trust Score, comparison mode, widget, and free themes — works fully without any secrets configured.
+Release signing keys and the push and tenant settings are optional and only needed to reproduce production behaviour; without them you get an unsigned release build, push disabled and the default store. Versioning and the release pipeline are described in [docs/RELEASING.md](docs/RELEASING.md).
 
 </details>
 
@@ -228,8 +188,8 @@ Everything else — the six-source scanner, Trust Score, comparison mode, widget
 - [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) — background update checks and the daily offline sync
 - SQLite with FTS4 — the offline catalogue and its instant search
 - [Shizuku](https://shizuku.rikka.app/) — silent installs without root
-- [AndroidX Security Crypto](https://developer.android.com/jetpack/androidx/releases/security) — encrypted storage for tokens and license keys
-- [Backdrop](https://github.com/Kyant0/Backdrop) — real-time blur for the Liquid Glass Pro themes
+- [AndroidX Security Crypto](https://developer.android.com/jetpack/androidx/releases/security) — encrypted storage for tokens
+- [Backdrop](https://github.com/Kyant0/Backdrop) — blur for the glass looks
 
 <a id="contributing"></a>
 ## 🤝 Contributing
@@ -245,28 +205,11 @@ Contributions are welcome! Open an issue first to discuss what you'd like to cha
 <a id="support"></a>
 ## 💖 Support
 
-If Appstore is useful to you:
 - ⭐ Star this repo
-- 💎 Grab [Liquid Glass Pro](https://narzo7.gumroad.com/l/suayy) — it's the main thing that funds ongoing development
-- 🐦 Share with your friends
 - 🐛 Report bugs in [Issues](https://github.com/Zapier-codes/Storeapp/issues)
 - 📝 Send feedback via the in-app feedback button
 
-**App Support:** https://t.me/vyxelapps/1
-
-### ☕ Buy Me a Coffee
-
-Hey! 👋 I'm Nikhil, an indie Android developer building this project in my free time — making apps from GitHub, GitLab, F-Droid, and other developer-first sources easier to discover, install, and manage on Android, while keeping everything open, fast, and user-friendly.
-
-Every contribution goes directly toward new features, bug fixes, performance improvements, and long-term development.
-
-<div align="center">
-
-[![Buy Me a Coffee](https://img.shields.io/badge/☕_Buy_Me_a_Coffee-Support_Development-5FF5D3?style=for-the-badge&labelColor=0B1D4F)](https://narzo7.gumroad.com/l/nhlevz)
-
-*Thank you for supporting independent open-source development ❤️*
-
-</div>
+Upstream's own funding links belong to its author and are not ours, so they are not listed here.
 
 ## 📄 License
 
@@ -278,7 +221,7 @@ Every contribution goes directly toward new features, bug fixes, performance imp
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:C5E6FB,50:5FF5D3,100:4390FF&height=90&section=footer" width="100%" height="90" alt="divider"/>
 
-Built with ❤️ for the open-source community.
+Built for the open-source community.
 
 [⬆ Back to top](#top)
 
