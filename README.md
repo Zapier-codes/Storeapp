@@ -41,7 +41,7 @@
 <a id="whats-new"></a>
 ## 🆕 What's new
 
-- **A new look.** New brand icon (three rounded facets in blue, mint and ice on deep navy), a new launch splash that types the name **Appstore** out under the icon, and a **2026 home**: a full-bleed hero carousel, image-tile collections and a flat "Recommended for you" list. The old first-run GitHub-token page is gone; the token is an optional setting and Home works without it.
+- **A new look.** New app icon (a glossy four-colour glass triangle on black, the one on your launcher), a new launch splash that types the name **Appstore** out under the icon, and a **2026 home**: a full-bleed hero carousel, image-tile collections and a flat "Recommended for you" list. The old first-run GitHub-token page is gone; the token is an optional setting and Home works without it.
 - **Every theme is free.** Liquid Glass Dark and Light, Cyberpunk and Neon Punk sit beside Light, Dark, Minimal, AMOLED, Sunset and Custom, with no key, payment or network check. See [Themes](#themes).
 - **Two interfaces.** The classic four-tab dock, or the Expressive shell with five tabs (Home, Search, Updates, Sources, Settings). Switch in Settings.
 - **Zealot first.** The signed Zealot catalog is the first source in both interfaces, and every download is checked (SHA-256 and signing certificate) before it installs. D-Store is browse-only.
