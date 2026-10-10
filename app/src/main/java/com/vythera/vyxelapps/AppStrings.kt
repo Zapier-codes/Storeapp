@@ -136,6 +136,10 @@ data class AppStrings(
     // ── Background self-update (h.vi) ─────────────────────────────────────────
     val backgroundSelfUpdate: String = "Background update check",
     val backgroundSelfUpdateDesc: String = "Notify me when a new version of the store is available. Nothing downloads until you tap.",
+    // Z-P17: the opt-in crash reporter. Off by default; wording says what is sent and what is not.
+    val crashReportingSection: String = "PRIVACY",
+    val crashReportingTitle: String = "Send crash reports",
+    val crashReportingDesc: String = "Off by default. When on, an unexpected crash sends the error message, the stack trace, the app version, your Android version and your device model to the app's developer. No account, no identifier, no usage data.",
     // ── Topics / tags ─────────────────────────────────────────────────────────
     val topics: String = "Topics",
     // ── Sort ─────────────────────────────────────────────────────────────────
@@ -494,6 +498,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "नेव बार टेक्स्ट रंग",
         selectNavTextColor = "टेक्स्ट रंग चुनें",
         reset = "रीसेट",
+        crashReportingSection = "गोपनीयता",
+        crashReportingTitle = "क्रैश रिपोर्ट भेजें",
+        crashReportingDesc = "डिफ़ॉल्ट रूप से बंद। चालू होने पर, कोई अनपेक्षित क्रैश त्रुटि संदेश, स्टैक ट्रेस, ऐप संस्करण, आपका एंड्रॉइड संस्करण और डिवाइस मॉडल ऐप डेवलपर को भेजता है। कोई खाता नहीं, कोई पहचानकर्ता नहीं, कोई उपयोग डेटा नहीं।",
     )
 
     "Spanish" -> AppStrings(
@@ -626,6 +633,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Color de texto de la barra de navegación",
         selectNavTextColor = "Seleccionar color de texto",
         reset = "Restablecer",
+        crashReportingSection = "PRIVACIDAD",
+        crashReportingTitle = "Enviar informes de fallos",
+        crashReportingDesc = "Desactivado por defecto. Cuando está activado, un fallo inesperado envía el mensaje de error, el seguimiento de la pila, la versión de la app, tu versión de Android y el modelo del dispositivo al desarrollador. Sin cuenta, sin identificador, sin datos de uso.",
     )
 
     "French" -> AppStrings(
@@ -757,6 +767,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Couleur du texte de la barre de navigation",
         selectNavTextColor = "Sélectionner la couleur du texte",
         reset = "Réinitialiser",
+        crashReportingSection = "CONFIDENTIALITÉ",
+        crashReportingTitle = "Envoyer les rapports de plantage",
+        crashReportingDesc = "Désactivé par défaut. Lorsqu'il est activé, un plantage inattendu envoie le message d'erreur, la trace de la pile, la version de l'app, votre version d'Android et le modèle de l'appareil au développeur. Aucun compte, aucun identifiant, aucune donnée d'usage.",
     )
 
     "German" -> AppStrings(
@@ -888,6 +901,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Navigationsleisten-Textfarbe",
         selectNavTextColor = "Textfarbe auswählen",
         reset = "Zurücksetzen",
+        crashReportingSection = "DATENSCHUTZ",
+        crashReportingTitle = "Absturzberichte senden",
+        crashReportingDesc = "Standardmäßig aus. Wenn an, sendet ein unerwarteter Absturz die Fehlermeldung, den Stacktrace, die App-Version, deine Android-Version und das Gerätemodell an den Entwickler. Kein Konto, keine Kennung, keine Nutzungsdaten.",
     )
 
     "Japanese" -> AppStrings(
@@ -1018,6 +1034,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "ナビバーのテキスト色",
         selectNavTextColor = "テキスト色を選択",
         reset = "リセット",
+        crashReportingSection = "プライバシー",
+        crashReportingTitle = "クラッシュレポートを送信",
+        crashReportingDesc = "既定ではオフ。オンにすると、予期しないクラッシュ時にエラーメッセージ、スタックトレース、アプリのバージョン、お使いの Android のバージョン、端末モデルが開発者に送信されます。アカウント、識別子、利用データは一切送信しません。",
     )
 
     "Portuguese" -> AppStrings(
@@ -1149,6 +1168,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Cor do texto da barra de navegação",
         selectNavTextColor = "Selecionar cor do texto",
         reset = "Redefinir",
+        crashReportingSection = "PRIVACIDADE",
+        crashReportingTitle = "Enviar relatórios de falhas",
+        crashReportingDesc = "Desativado por predefinição. Quando ativado, uma falha inesperada envia a mensagem de erro, o rastreamento da pilha, a versão da app, a sua versão do Android e o modelo do dispositivo ao programador. Sem conta, sem identificador, sem dados de utilização.",
     )
 
     "Italian" -> AppStrings(
@@ -1280,6 +1302,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Colore testo barra di navigazione",
         selectNavTextColor = "Seleziona colore testo",
         reset = "Reimposta",
+        crashReportingSection = "PRIVACY",
+        crashReportingTitle = "Invia segnalazioni di arresto anomalo",
+        crashReportingDesc = "Disattivato per impostazione predefinita. Quando attivo, un arresto anomalo imprevisto invia il messaggio di errore, la traccia dello stack, la versione dell'app, la versione di Android e il modello del dispositivo allo sviluppatore. Nessun account, nessun identificatore, nessun dato di utilizzo.",
     )
 
     "Russian" -> AppStrings(
@@ -1411,6 +1436,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Цвет текста панели навигации",
         selectNavTextColor = "Выбрать цвет текста",
         reset = "Сбросить",
+        crashReportingSection = "КОНФИДЕНЦИАЛЬНОСТЬ",
+        crashReportingTitle = "Отправлять отчёты о сбоях",
+        crashReportingDesc = "По умолчанию выключено. Когда включено, неожиданный сбой отправляет разработчику сообщение об ошибке, трассировку стека, версию приложения, версию Android и модель устройства. Без аккаунта, без идентификатора, без данных об использовании.",
     )
 
     "Chinese" -> AppStrings(
@@ -1541,6 +1569,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "导航栏文字颜色",
         selectNavTextColor = "选择文字颜色",
         reset = "重置",
+        crashReportingSection = "隐私",
+        crashReportingTitle = "发送崩溃报告",
+        crashReportingDesc = "默认关闭。开启后，发生意外崩溃时会向应用开发者发送错误消息、堆栈跟踪、应用版本、你的 Android 版本和设备型号。不包含账户、标识符或使用数据。",
     )
 
     "Korean" -> AppStrings(
@@ -1671,6 +1702,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "내비게이션 바 텍스트 색상",
         selectNavTextColor = "텍스트 색상 선택",
         reset = "초기화",
+        crashReportingSection = "개인정보",
+        crashReportingTitle = "충돌 보고서 보내기",
+        crashReportingDesc = "기본적으로 꺼져 있습니다. 켜면 예기치 않은 충돌 시 오류 메시지, 스택 추적, 앱 버전, Android 버전, 기기 모델이 개발자에게 전송됩니다. 계정, 식별자, 사용 데이터는 전송하지 않습니다.",
     )
 
     "Arabic" -> AppStrings(
@@ -1802,6 +1836,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "لون نص شريط التنقل",
         selectNavTextColor = "اختر لون النص",
         reset = "إعادة تعيين",
+        crashReportingSection = "الخصوصية",
+        crashReportingTitle = "إرسال تقارير الأعطال",
+        crashReportingDesc = "معطّل افتراضيًا. عند تشغيله، يرسل العطل غير المتوقع رسالة الخطأ وتتبّع المكدس وإصدار التطبيق وإصدار أندرويد وطراز الجهاز إلى مطوّر التطبيق. بلا حساب أو معرّف أو بيانات استخدام.",
     )
 
     "Dutch" -> AppStrings(
@@ -1932,6 +1969,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Tekstkleur navigatiebalk",
         selectNavTextColor = "Tekstkleur selecteren",
         reset = "Resetten",
+        crashReportingSection = "PRIVACY",
+        crashReportingTitle = "Crashrapporten verzenden",
+        crashReportingDesc = "Standaard uit. Indien aan, stuurt een onverwachte crash het foutbericht, de stacktracering, de app-versie, je Android-versie en het toestelmodel naar de ontwikkelaar. Geen account, geen identificatie, geen gebruiksgegevens.",
     )
 
     "Turkish" -> AppStrings(
@@ -2062,6 +2102,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Gezinme çubuğu metin rengi",
         selectNavTextColor = "Metin rengini seç",
         reset = "Sıfırla",
+        crashReportingSection = "GİZLİLİK",
+        crashReportingTitle = "Çökme raporları gönder",
+        crashReportingDesc = "Varsayılan olarak kapalı. Açıkken beklenmedik bir çökme; hata mesajını, yığın izini, uygulama sürümünü, Android sürümünü ve cihaz modelini geliştiriciye gönderir. Hesap yok, tanımlayıcı yok, kullanım verisi yok.",
     )
 
     "Polish" -> AppStrings(
@@ -2193,6 +2236,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Kolor tekstu paska nawigacyjnego",
         selectNavTextColor = "Wybierz kolor tekstu",
         reset = "Resetuj",
+        crashReportingSection = "PRYWATNOŚĆ",
+        crashReportingTitle = "Wysyłaj raporty o awariach",
+        crashReportingDesc = "Domyślnie wyłączone. Po włączeniu nieoczekiwana awaria wysyła do dewelopera komunikat błędu, zrzut stosu, wersję aplikacji, wersję Androida i model urządzenia. Bez konta, bez identyfikatora, bez danych o użyciu.",
     )
 
     "Swedish" -> AppStrings(
@@ -2323,6 +2369,9 @@ private fun rawStringsForLanguage(language: String): AppStrings = when (language
         navTextColorLabel = "Navigeringsfältets textfärg",
         selectNavTextColor = "Välj textfärg",
         reset = "Återställ",
+        crashReportingSection = "INTEGRITET",
+        crashReportingTitle = "Skicka kraschrapporter",
+        crashReportingDesc = "Av som standard. När det är på skickar en oväntad krasch felmeddelandet, stackspårningen, appversionen, din Android-version och enhetsmodellen till utvecklaren. Inget konto, ingen identifierare, ingen användningsdata.",
     )
 
     else -> AppStrings() // English default

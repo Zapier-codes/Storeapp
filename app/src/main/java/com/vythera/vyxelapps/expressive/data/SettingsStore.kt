@@ -39,6 +39,11 @@ data class Settings(
      */
     val hiddenPackages: Set<String> = emptySet(),
     val installedSort: InstalledSort = InstalledSort.Recent,
+    /**
+     * Z-P17: the opt-in crash reporter. Off by default ("no telemetry by default"); the person turns it on,
+     * and it also needs a vitals token configured for the build to actually send anything.
+     */
+    val crashReportingEnabled: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -53,6 +58,7 @@ class SettingsStore(private val context: Context) {
         val DESKTOP = booleanPreferencesKey("show_desktop_sources")
         val HIDDEN = stringSetPreferencesKey("hidden_packages")
         val INSTALLED_SORT = stringPreferencesKey("installed_sort")
+        val CRASH_REPORTING = booleanPreferencesKey("crash_reporting")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { prefs ->
@@ -75,6 +81,8 @@ class SettingsStore(private val context: Context) {
             installedSort = prefs[Keys.INSTALLED_SORT]
                 ?.let { runCatching { InstalledSort.valueOf(it) }.getOrNull() }
                 ?: InstalledSort.Recent,
+            crashReportingEnabled = prefs[Keys.CRASH_REPORTING]
+                ?: com.vythera.vyxelapps.crash.CrashReporter.isEnabled(context),
         )
     }
 
@@ -111,6 +119,12 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setShowDesktopSources(enabled: Boolean) =
         context.dataStore.edit { it[Keys.DESKTOP] = enabled }.let { }
+
+    /** Z-P17: turn the opt-in crash reporter on/off, and keep the handler's mirror in step with it. */
+    suspend fun setCrashReporting(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.CRASH_REPORTING] = enabled }
+        com.vythera.vyxelapps.crash.CrashReporter.setEnabled(context, enabled)
+    }
 
     suspend fun toggleSource(source: SourceId, enabled: Boolean) {
         context.dataStore.edit { prefs ->

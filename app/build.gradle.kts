@@ -86,6 +86,11 @@ android {
         // /index.json and /index.json.sig. A public URL, not a secret, so it is the default; -PzealotCatalogUrl
         // overrides it (a blank property falls back to the default).
         buildConfigField("String", "ZEALOT_CATALOG_URL", "\"${prop("zealotCatalogUrl").ifBlank { "https://zealot-deploy-latest.onrender.com/catalog" }}\"")
+        // Z-P17: the vitals-scoped per-app API token the opt-in crash reporter sends with. Blank (the default,
+        // and every public build) means crash reporting cannot send, on top of the user's own switch. A
+        // vitals token can only POST /api/crash_reports -- it can never upload a release. Never committed; set
+        // with -PcrashReportingToken=zpa_... for an internal/release build that should be able to report.
+        buildConfigField("String", "CRASH_REPORTING_TOKEN", "\"${prop("crashReportingToken")}\"")
     }
 
     // Packaging-identity-only product flavors -- leaf `1.c.i.zo`. One flavor per distributable

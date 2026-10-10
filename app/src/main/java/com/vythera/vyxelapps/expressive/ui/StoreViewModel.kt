@@ -920,6 +920,10 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
             loadHome()
         }
 
+    /** Z-P17: the opt-in crash reporter switch. */
+    fun setCrashReporting(enabled: Boolean) =
+        viewModelScope.launch { settingsStore.setCrashReporting(enabled) }
+
     fun toggleSource(source: SourceId, enabled: Boolean) =
         viewModelScope.launch {
             settingsStore.toggleSource(source, enabled)

@@ -569,6 +569,7 @@ fun ExpressiveShell(
                     onGithubToken = viewModel::setGithubToken,
                     onClearCache = viewModel::clearDownloadCache,
                     contentPadding = contentPadding,
+                    onCrashReporting = viewModel::setCrashReporting,
                     onSkin = viewModel::setSkin,
                     // Written straight into Classic's settings — the single store both
                     // shells read, so the glass looks the same on either side.

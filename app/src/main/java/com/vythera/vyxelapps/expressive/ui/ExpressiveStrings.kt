@@ -203,6 +203,13 @@ data class ExpressiveStrings(
     val showDesktopSources: String = "Show desktop sources",
     val showDesktopSourcesDesc: String =
         "Include Flathub and WinGet results. These can't be installed from your phone.",
+    // Z-P17: the opt-in crash reporter. Wording says what is sent and what is not.
+    val sectionPrivacy: String = "Privacy",
+    val crashReportingTitle: String = "Send crash reports",
+    val crashReportingDesc: String =
+        "Off by default. When on, an unexpected crash sends the error message, the stack trace, " +
+            "the app version, your Android version and your device model to the app's developer. " +
+            "No account, no identifier, no usage data.",
     val githubTokenDesc: String =
         "Unauthenticated GitHub search allows 10 requests a minute. " +
             "A personal access token (no scopes needed) raises that to 30.",
@@ -321,6 +328,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "ऐप के हर एनिमेशन को मापता है। शांत मोड बदलाव तो रखता है पर अधिकांश हलचल हटा देता है।",
         sectionCatalog = "कैटलॉग", showDesktopSources = "डेस्कटॉप स्रोत दिखाएं",
         showDesktopSourcesDesc = "Flathub और WinGet परिणाम शामिल करें। ये आपके फ़ोन पर इंस्टॉल नहीं हो सकते।",
+        sectionPrivacy = "गोपनीयता",
+        crashReportingTitle = "क्रैश रिपोर्ट भेजें",
+        crashReportingDesc =
+            "डिफ़ॉल्ट रूप से बंद। चालू होने पर, कोई अनपेक्षित क्रैश त्रुटि संदेश, स्टैक ट्रेस, ऐप संस्करण, आपका एंड्रॉइड संस्करण और डिवाइस मॉडल ऐप डेवलपर को भेजता है। कोई खाता नहीं, कोई पहचानकर्ता नहीं, कोई उपयोग डेटा नहीं।",
         githubTokenDesc = "बिना प्रमाणीकरण के GitHub खोज प्रति मिनट 10 अनुरोध देती है। व्यक्तिगत एक्सेस टोकन (किसी स्कोप की ज़रूरत नहीं) इसे 30 कर देता है।",
         tokenRejectedDesc = "GitHub ने यह टोकन अस्वीकार किया (401)। यह समाप्त, रद्द या गलत टाइप किया गया है — बदलने या हटाने तक GitHub गुमनाम रूप से चल रहा है।",
         sectionStorage = "स्टोरेज", downloadedApks = "डाउनलोड किए गए APK", storageEmpty = "खाली",
@@ -421,6 +432,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Escala todas las animaciones de la app. El modo calmado conserva los cambios de estado pero elimina casi todo el movimiento.",
         sectionCatalog = "Catálogo", showDesktopSources = "Mostrar fuentes de escritorio",
         showDesktopSourcesDesc = "Incluye resultados de Flathub y WinGet. No se pueden instalar desde el teléfono.",
+        sectionPrivacy = "Privacidad",
+        crashReportingTitle = "Enviar informes de fallos",
+        crashReportingDesc =
+            "Desactivado por defecto. Cuando está activado, un fallo inesperado envía el mensaje de error, el seguimiento de la pila, la versión de la app, tu versión de Android y el modelo del dispositivo al desarrollador. Sin cuenta, sin identificador, sin datos de uso.",
         githubTokenDesc = "La búsqueda de GitHub sin autenticar permite 10 solicitudes por minuto. Un token de acceso personal (sin permisos) lo sube a 30.",
         tokenRejectedDesc = "GitHub rechazó este token (401). Está caducado, revocado o mal escrito: GitHub funciona de forma anónima hasta que lo reemplaces o lo borres.",
         sectionStorage = "Almacenamiento", downloadedApks = "APK descargados", storageEmpty = "Vacío",
@@ -521,6 +536,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Ajuste toutes les animations de l'appli. Le mode calme conserve les changements d'état mais supprime presque tout le mouvement.",
         sectionCatalog = "Catalogue", showDesktopSources = "Afficher les sources bureau",
         showDesktopSourcesDesc = "Inclure les résultats Flathub et WinGet. Ils ne s'installent pas depuis le téléphone.",
+        sectionPrivacy = "Confidentialité",
+        crashReportingTitle = "Envoyer les rapports de plantage",
+        crashReportingDesc =
+            "Désactivé par défaut. Lorsqu'il est activé, un plantage inattendu envoie le message d'erreur, la trace de la pile, la version de l'app, votre version d'Android et le modèle de l'appareil au développeur. Aucun compte, aucun identifiant, aucune donnée d'usage.",
         githubTokenDesc = "La recherche GitHub non authentifiée autorise 10 requêtes par minute. Un jeton d'accès personnel (sans portée) porte ce chiffre à 30.",
         tokenRejectedDesc = "GitHub a refusé ce jeton (401). Il est expiré, révoqué ou mal saisi — GitHub fonctionne en anonyme jusqu'à son remplacement ou sa suppression.",
         sectionStorage = "Stockage", downloadedApks = "APK téléchargés", storageEmpty = "Vide",
@@ -621,6 +640,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Skaliert jede Animation in der App. „Ruhig“ behält Zustandswechsel bei, entfernt aber die meiste Bewegung.",
         sectionCatalog = "Katalog", showDesktopSources = "Desktop-Quellen anzeigen",
         showDesktopSourcesDesc = "Flathub- und WinGet-Ergebnisse einbeziehen. Diese lassen sich nicht vom Telefon aus installieren.",
+        sectionPrivacy = "Datenschutz",
+        crashReportingTitle = "Absturzberichte senden",
+        crashReportingDesc =
+            "Standardmäßig aus. Wenn an, sendet ein unerwarteter Absturz die Fehlermeldung, den Stacktrace, die App-Version, deine Android-Version und das Gerätemodell an den Entwickler. Kein Konto, keine Kennung, keine Nutzungsdaten.",
         githubTokenDesc = "Nicht authentifizierte GitHub-Suche erlaubt 10 Anfragen pro Minute. Ein persönliches Zugriffstoken (ohne Berechtigungen) erhöht das auf 30.",
         tokenRejectedDesc = "GitHub hat dieses Token abgelehnt (401). Es ist abgelaufen, widerrufen oder vertippt — GitHub läuft anonym, bis es ersetzt oder gelöscht wird.",
         sectionStorage = "Speicher", downloadedApks = "Heruntergeladene APKs", storageEmpty = "Leer",
@@ -721,6 +744,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "アプリ内のすべてのアニメーションを調整します。「静か」は状態変化を残しつつ動きの大半を抑えます。",
         sectionCatalog = "カタログ", showDesktopSources = "デスクトップのソースを表示",
         showDesktopSourcesDesc = "Flathub と WinGet の結果を含めます。これらは携帯電話からはインストールできません。",
+        sectionPrivacy = "プライバシー",
+        crashReportingTitle = "クラッシュレポートを送信",
+        crashReportingDesc =
+            "既定ではオフ。オンにすると、予期しないクラッシュ時にエラーメッセージ、スタックトレース、アプリのバージョン、お使いの Android のバージョン、端末モデルが開発者に送信されます。アカウント、識別子、利用データは一切送信しません。",
         githubTokenDesc = "認証なしの GitHub 検索は毎分 10 リクエストまでです。個人アクセストークン (スコープ不要) を使うと 30 になります。",
         tokenRejectedDesc = "GitHub がこのトークンを拒否しました (401)。期限切れ・失効・入力ミスのいずれかです。置き換えるか削除するまで匿名で動作します。",
         sectionStorage = "ストレージ", downloadedApks = "ダウンロード済み APK", storageEmpty = "空",
@@ -821,6 +848,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Ajusta todas as animações da app. O modo calmo mantém as mudanças de estado mas remove quase todo o movimento.",
         sectionCatalog = "Catálogo", showDesktopSources = "Mostrar fontes de computador",
         showDesktopSourcesDesc = "Incluir resultados do Flathub e do WinGet. Não podem ser instalados a partir do telemóvel.",
+        sectionPrivacy = "Privacidade",
+        crashReportingTitle = "Enviar relatórios de falhas",
+        crashReportingDesc =
+            "Desativado por predefinição. Quando ativado, uma falha inesperada envia a mensagem de erro, o rastreamento da pilha, a versão da app, a sua versão do Android e o modelo do dispositivo ao programador. Sem conta, sem identificador, sem dados de utilização.",
         githubTokenDesc = "A pesquisa do GitHub sem autenticação permite 10 pedidos por minuto. Um token de acesso pessoal (sem âmbitos) aumenta para 30.",
         tokenRejectedDesc = "O GitHub rejeitou este token (401). Está expirado, revogado ou mal escrito — o GitHub funciona anonimamente até ser substituído ou removido.",
         sectionStorage = "Armazenamento", downloadedApks = "APK transferidos", storageEmpty = "Vazio",
@@ -921,6 +952,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Regola ogni animazione dell'app. La modalità calma mantiene i cambi di stato ma elimina quasi tutto il movimento.",
         sectionCatalog = "Catalogo", showDesktopSources = "Mostra fonti desktop",
         showDesktopSourcesDesc = "Includi i risultati di Flathub e WinGet. Non si possono installare dal telefono.",
+        sectionPrivacy = "Privacy",
+        crashReportingTitle = "Invia segnalazioni di arresto anomalo",
+        crashReportingDesc =
+            "Disattivato per impostazione predefinita. Quando attivo, un arresto anomalo imprevisto invia il messaggio di errore, la traccia dello stack, la versione dell'app, la versione di Android e il modello del dispositivo allo sviluppatore. Nessun account, nessun identificatore, nessun dato di utilizzo.",
         githubTokenDesc = "La ricerca GitHub non autenticata consente 10 richieste al minuto. Un token di accesso personale (senza ambiti) la porta a 30.",
         tokenRejectedDesc = "GitHub ha rifiutato questo token (401). È scaduto, revocato o digitato male — GitHub resta anonimo finché non lo sostituisci o lo cancelli.",
         sectionStorage = "Archiviazione", downloadedApks = "APK scaricati", storageEmpty = "Vuoto",
@@ -1021,6 +1056,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Масштабирует все анимации приложения. Спокойный режим сохраняет смену состояний, но убирает большую часть движения.",
         sectionCatalog = "Каталог", showDesktopSources = "Показывать настольные источники",
         showDesktopSourcesDesc = "Включать результаты Flathub и WinGet. Их нельзя установить с телефона.",
+        sectionPrivacy = "Конфиденциальность",
+        crashReportingTitle = "Отправлять отчёты о сбоях",
+        crashReportingDesc =
+            "По умолчанию выключено. Когда включено, неожиданный сбой отправляет разработчику сообщение об ошибке, трассировку стека, версию приложения, версию Android и модель устройства. Без аккаунта, без идентификатора, без данных об использовании.",
         githubTokenDesc = "Поиск GitHub без авторизации допускает 10 запросов в минуту. Персональный токен доступа (без разрешений) поднимает лимит до 30.",
         tokenRejectedDesc = "GitHub отклонил этот токен (401). Он истёк, отозван или введён с ошибкой — до замены или удаления GitHub работает анонимно.",
         sectionStorage = "Хранилище", downloadedApks = "Загруженные APK", storageEmpty = "Пусто",
@@ -1121,6 +1160,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "调整应用内所有动画。“平静”保留状态变化，但去除大部分动作。",
         sectionCatalog = "目录", showDesktopSources = "显示桌面端来源",
         showDesktopSourcesDesc = "包含 Flathub 和 WinGet 的结果。这些无法从手机安装。",
+        sectionPrivacy = "隐私",
+        crashReportingTitle = "发送崩溃报告",
+        crashReportingDesc =
+            "默认关闭。开启后，发生意外崩溃时会向应用开发者发送错误消息、堆栈跟踪、应用版本、你的 Android 版本和设备型号。不包含账户、标识符或使用数据。",
         githubTokenDesc = "未认证的 GitHub 搜索每分钟允许 10 次请求。使用个人访问令牌（无需任何权限）可提升到 30 次。",
         tokenRejectedDesc = "GitHub 拒绝了此令牌 (401)。它已过期、被吊销或输入有误——在替换或清除之前将以匿名方式运行。",
         sectionStorage = "存储", downloadedApks = "已下载的 APK", storageEmpty = "空",
@@ -1221,6 +1264,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "앱의 모든 애니메이션 크기를 조절합니다. 차분함은 상태 변화는 유지하되 대부분의 움직임을 없앱니다.",
         sectionCatalog = "카탈로그", showDesktopSources = "데스크톱 소스 표시",
         showDesktopSourcesDesc = "Flathub와 WinGet 결과를 포함합니다. 휴대폰에서는 설치할 수 없습니다.",
+        sectionPrivacy = "개인정보",
+        crashReportingTitle = "충돌 보고서 보내기",
+        crashReportingDesc =
+            "기본적으로 꺼져 있습니다. 켜면 예기치 않은 충돌 시 오류 메시지, 스택 추적, 앱 버전, Android 버전, 기기 모델이 개발자에게 전송됩니다. 계정, 식별자, 사용 데이터는 전송하지 않습니다.",
         githubTokenDesc = "인증 없는 GitHub 검색은 분당 10회 요청만 허용합니다. 개인 액세스 토큰(권한 불필요)을 쓰면 30회로 늘어납니다.",
         tokenRejectedDesc = "GitHub가 이 토큰을 거부했습니다(401). 만료·취소되었거나 잘못 입력되었습니다. 교체하거나 지울 때까지 익명으로 동작합니다.",
         sectionStorage = "저장공간", downloadedApks = "다운로드한 APK", storageEmpty = "비어 있음",
@@ -1321,6 +1368,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "يضبط كل الحركات في التطبيق. الوضع الهادئ يبقي تغيّرات الحالة لكنه يزيل معظم الحركة.",
         sectionCatalog = "الكتالوج", showDesktopSources = "إظهار مصادر سطح المكتب",
         showDesktopSourcesDesc = "تضمين نتائج Flathub وWinGet. لا يمكن تثبيتها من هاتفك.",
+        sectionPrivacy = "الخصوصية",
+        crashReportingTitle = "إرسال تقارير الأعطال",
+        crashReportingDesc =
+            "معطّل افتراضيًا. عند تشغيله، يرسل العطل غير المتوقع رسالة الخطأ وتتبّع المكدس وإصدار التطبيق وإصدار أندرويد وطراز الجهاز إلى مطوّر التطبيق. بلا حساب أو معرّف أو بيانات استخدام.",
         githubTokenDesc = "بحث GitHub دون مصادقة يسمح بـ 10 طلبات في الدقيقة. رمز وصول شخصي (بدون صلاحيات) يرفعها إلى 30.",
         tokenRejectedDesc = "رفض GitHub هذا الرمز (401). فهو منتهٍ أو ملغى أو مكتوب خطأً — وسيعمل GitHub بشكل مجهول حتى استبداله أو مسحه.",
         sectionStorage = "التخزين", downloadedApks = "ملفات APK المنزّلة", storageEmpty = "فارغ",
@@ -1421,6 +1472,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Schaalt elke animatie in de app. Kalm behoudt toestandswisselingen maar haalt het meeste beweging weg.",
         sectionCatalog = "Catalogus", showDesktopSources = "Desktopbronnen tonen",
         showDesktopSourcesDesc = "Neem resultaten van Flathub en WinGet mee. Die kun je niet vanaf je telefoon installeren.",
+        sectionPrivacy = "Privacy",
+        crashReportingTitle = "Crashrapporten verzenden",
+        crashReportingDesc =
+            "Standaard uit. Indien aan, stuurt een onverwachte crash het foutbericht, de stacktracering, de app-versie, je Android-versie en het toestelmodel naar de ontwikkelaar. Geen account, geen identificatie, geen gebruiksgegevens.",
         githubTokenDesc = "Niet-geverifieerd zoeken op GitHub staat 10 verzoeken per minuut toe. Een persoonlijk toegangstoken (zonder scopes) verhoogt dat naar 30.",
         tokenRejectedDesc = "GitHub heeft dit token geweigerd (401). Het is verlopen, ingetrokken of verkeerd getypt — GitHub werkt anoniem tot het vervangen of gewist is.",
         sectionStorage = "Opslag", downloadedApks = "Gedownloade APK's", storageEmpty = "Leeg",
@@ -1521,6 +1576,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Uygulamadaki tüm animasyonları ölçekler. Sakin mod durum değişimlerini korur ama hareketin çoğunu kaldırır.",
         sectionCatalog = "Katalog", showDesktopSources = "Masaüstü kaynaklarını göster",
         showDesktopSourcesDesc = "Flathub ve WinGet sonuçlarını dahil et. Bunlar telefonunuzdan kurulamaz.",
+        sectionPrivacy = "Gizlilik",
+        crashReportingTitle = "Çökme raporları gönder",
+        crashReportingDesc =
+            "Varsayılan olarak kapalı. Açıkken beklenmedik bir çökme; hata mesajını, yığın izini, uygulama sürümünü, Android sürümünü ve cihaz modelini geliştiriciye gönderir. Hesap yok, tanımlayıcı yok, kullanım verisi yok.",
         githubTokenDesc = "Kimlik doğrulamasız GitHub araması dakikada 10 isteğe izin verir. Kişisel erişim belirteci (kapsam gerekmez) bunu 30'a çıkarır.",
         tokenRejectedDesc = "GitHub bu belirteci reddetti (401). Süresi dolmuş, iptal edilmiş veya yanlış yazılmış — değiştirilene ya da silinene kadar GitHub anonim çalışır.",
         sectionStorage = "Depolama", downloadedApks = "İndirilen APK'lar", storageEmpty = "Boş",
@@ -1621,6 +1680,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Skaluje każdą animację w aplikacji. Tryb spokojny zachowuje zmiany stanu, ale usuwa większość ruchu.",
         sectionCatalog = "Katalog", showDesktopSources = "Pokaż źródła komputerowe",
         showDesktopSourcesDesc = "Uwzględnij wyniki z Flathub i WinGet. Nie da się ich zainstalować z telefonu.",
+        sectionPrivacy = "Prywatność",
+        crashReportingTitle = "Wysyłaj raporty o awariach",
+        crashReportingDesc =
+            "Domyślnie wyłączone. Po włączeniu nieoczekiwana awaria wysyła do dewelopera komunikat błędu, zrzut stosu, wersję aplikacji, wersję Androida i model urządzenia. Bez konta, bez identyfikatora, bez danych o użyciu.",
         githubTokenDesc = "Wyszukiwanie GitHub bez uwierzytelnienia pozwala na 10 zapytań na minutę. Osobisty token dostępu (bez uprawnień) podnosi limit do 30.",
         tokenRejectedDesc = "GitHub odrzucił ten token (401). Wygasł, został cofnięty lub jest błędnie wpisany — GitHub działa anonimowo do czasu wymiany lub usunięcia tokenu.",
         sectionStorage = "Pamięć", downloadedApks = "Pobrane pliki APK", storageEmpty = "Pusto",
@@ -1721,6 +1784,10 @@ fun expressiveStringsFor(language: String): ExpressiveStrings = when (language) 
         motionIntensityDesc = "Skalar alla animationer i appen. Lugnt läge behåller tillståndsändringar men tar bort det mesta av rörelsen.",
         sectionCatalog = "Katalog", showDesktopSources = "Visa skrivbordskällor",
         showDesktopSourcesDesc = "Inkludera resultat från Flathub och WinGet. De går inte att installera från telefonen.",
+        sectionPrivacy = "Integritet",
+        crashReportingTitle = "Skicka kraschrapporter",
+        crashReportingDesc =
+            "Av som standard. När det är på skickar en oväntad krasch felmeddelandet, stackspårningen, appversionen, din Android-version och enhetsmodellen till utvecklaren. Inget konto, ingen identifierare, ingen användningsdata.",
         githubTokenDesc = "Oautentiserad GitHub-sökning tillåter 10 förfrågningar per minut. En personlig åtkomsttoken (utan behörigheter) höjer det till 30.",
         tokenRejectedDesc = "GitHub avvisade denna token (401). Den har gått ut, återkallats eller skrivits fel — GitHub körs anonymt tills den byts ut eller rensas.",
         sectionStorage = "Lagring", downloadedApks = "Nedladdade APK-filer", storageEmpty = "Tomt",

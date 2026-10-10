@@ -891,6 +891,8 @@ fun SettingsScreen(
     var showPreReleases       by remember { mutableStateOf(settings.showPreReleases) }
     // h.vi: the optional background self-update check, off by default.
     var backgroundSelfUpdate  by remember { mutableStateOf(settings.backgroundSelfUpdate) }
+    // Z-P17: the opt-in crash reporter, off by default.
+    var crashReporting        by remember { mutableStateOf(settings.crashReportingEnabled) }
 
     fun currentSettings(tok: String = settings.githubToken) =
         settings.copy(
@@ -908,10 +910,11 @@ fun SettingsScreen(
             liquidGlassNavRefraction  = glassNavRefraction,
             liquidGlassNavTextColor   = glassNavTextColorHex,
             showPreReleases           = showPreReleases,
-            backgroundSelfUpdate      = backgroundSelfUpdate
+            backgroundSelfUpdate      = backgroundSelfUpdate,
+            crashReportingEnabled     = crashReporting
         )
 
-    LaunchedEffect(themeMode, amoled, fontName, language, wallpaperUri, glassBlur, glassEdge, glassRefraction, glassNavBlur, glassNavEdge, glassNavRefraction, glassNavTextColorHex, showPreReleases, backgroundSelfUpdate) {
+    LaunchedEffect(themeMode, amoled, fontName, language, wallpaperUri, glassBlur, glassEdge, glassRefraction, glassNavBlur, glassNavEdge, glassNavRefraction, glassNavTextColorHex, showPreReleases, backgroundSelfUpdate, crashReporting) {
         onSave(currentSettings())
     }
 
@@ -1869,6 +1872,38 @@ fun SettingsScreen(
                     Switch(
                         checked         = backgroundSelfUpdate,
                         onCheckedChange = { backgroundSelfUpdate = it; onSave(currentSettings()) }
+                    )
+                }
+            }
+
+            // Z-P17: the opt-in crash reporter. Off by default; when on, an uncaught crash is
+            // queued and posted to the app's developer with the build's vitals token.
+            GlassSettingsCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier              = Modifier
+                        .fillMaxWidth()
+                        .clickable { crashReporting = !crashReporting; onSave(currentSettings()) }
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            s.crashReportingTitle,
+                            style      = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color      = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            s.crashReportingDesc,
+                            style    = MaterialTheme.typography.bodySmall,
+                            color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 17.sp
+                        )
+                    }
+                    Switch(
+                        checked         = crashReporting,
+                        onCheckedChange = { crashReporting = it; onSave(currentSettings()) }
                     )
                 }
             }

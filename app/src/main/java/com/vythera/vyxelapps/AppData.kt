@@ -372,7 +372,11 @@ data class AppSettings(
     val uiStyle                   : String  = "Classic",
     // h.vi: whether UpdateCheckWorker also checks the store's own signed index for a
     // self-update offer; off by default so a background run never downloads anything.
-    val backgroundSelfUpdate      : Boolean = false
+    val backgroundSelfUpdate      : Boolean = false,
+    // Z-P17: the opt-in crash reporter. Off by default ("no telemetry by default").
+    // Mirrored into the reporter's own SharedPreferences so the uncaught-exception
+    // handler can read it synchronously (CrashReporter.setEnabled).
+    val crashReportingEnabled     : Boolean = false
 )
 
 // User-editable custom theme — accent is required, extra fields override auto-derived colors.
@@ -3840,6 +3844,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun updateSettings(s: AppSettings)  {
         val languageChanged = s.language != state.settings.language
         val tokenChanged    = s.githubToken != state.settings.githubToken
+        val crashChanged    = s.crashReportingEnabled != state.settings.crashReportingEnabled
         state = state.copy(settings = s)
         if (languageChanged) state = state.copy(translatedDescriptions = emptyMap(), translatedReadmes = emptyMap())
         RetrofitClient.authToken = s.githubToken
@@ -3847,6 +3852,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // anonymous against 5000 authenticated. Keeping them would show a ceiling the
         // user no longer has; they refill on the next request either way.
         if (tokenChanged) com.vythera.vyxelapps.api.GitHubRateLimit.reset()
+        // Z-P17: keep the reporter's synchronous mirror in step with the switch, so the
+        // uncaught-exception handler (which cannot read DataStore) sees the change at once.
+        if (crashChanged) com.vythera.vyxelapps.crash.CrashReporter.setEnabled(getApplication(), s.crashReportingEnabled)
         prefs.saveSettings(s)
     }
 

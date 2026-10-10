@@ -81,6 +81,8 @@ fun SettingsScreen(
     onGithubToken: (String) -> Unit,
     onClearCache: () -> Unit,
     contentPadding: PaddingValues,
+    /** Z-P17: toggles the opt-in crash reporter. */
+    onCrashReporting: (Boolean) -> Unit = {},
     onSkin: (VyxelSkin) -> Unit = {},
     /**
      * Liquid Glass tuning, held in Classic's settings so both shells render the theme
@@ -384,8 +386,24 @@ fun SettingsScreen(
             }
         }
 
-        // ── Shizuku ───────────────────────────────────────────────────────────
+        // ── Privacy ───────────────────────────────────────────────────────────
         //
+        // Z-P17: the one switch that makes this app send anything to Zealot. Off by
+        // default ("no telemetry by default"); when on, an uncaught crash (or a handled
+        // exception the app chooses to report) is queued and posted with the build's
+        // vitals token. Nothing else — no usage stats, no ids — is ever collected.
+        item(key = "privacy") {
+            SettingsCard(xs.sectionPrivacy) {
+                ToggleRow(
+                    title = xs.crashReportingTitle,
+                    subtitle = xs.crashReportingDesc,
+                    checked = settings.crashReportingEnabled,
+                    onCheckedChange = onCrashReporting,
+                )
+            }
+        }
+
+        // ── Shizuku ───────────────────────────────────────────────────────────
         // The install path has honoured Shizuku since it landed, but only Classic's
         // settings ever showed it. From this shell there was no way to see whether it
         // was connected and no way to grant it — so users who had Shizuku running

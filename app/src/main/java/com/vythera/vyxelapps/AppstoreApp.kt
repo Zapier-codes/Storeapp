@@ -32,6 +32,9 @@ class AppstoreApp : Application(), ImageLoaderFactory, coil3.SingletonImageLoade
         createNotificationChannel()
         scheduleUpdateChecks()
         com.vythera.vyxelapps.api.PushRegistrar.init(this)
+        // Z-P17: the opt-in crash reporter. A no-op unless the user turned it on in Settings AND a vitals token
+        // is configured for this build; with either missing it does not touch the default handler at all.
+        com.vythera.vyxelapps.crash.CrashReporter.install(this)
     }
 
     /** Coil 3 loader used by the Expressive UI; shares the app's OkHttp client. */
