@@ -1,7 +1,7 @@
 <a id="top"></a>
 <div align="center">
 
-<img src="docs/logo.png" width="410" alt="Appstore logo"/>
+<img src="docs/appstore-icon.png" width="410" alt="Appstore logo"/>
 
 # APPSTORE
 
