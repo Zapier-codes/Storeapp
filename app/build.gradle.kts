@@ -209,6 +209,12 @@ dependencies {
     // Ed25519PublicKeyParameters, used directly -- never registered as a JCA Provider) work
     // identically on every API level this app supports.
     implementation("org.bouncycastle:bcprov-jdk18on:1.84")
+    // Z-P13: bzip2 reading for the archive-patcher File-by-File patch's inner bsdiff stream. The
+    // JDK has no bzip2; Zealot writes the three bsdiff blocks with bzip2 and the client must read
+    // them. Commons Compress is the standard, small API for this (BZip2CompressorInputStream);
+    // commons-io is its own transitive dependency, declared so the version is pinned here too.
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("commons-io:commons-io:2.18.0")
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material3.windowSize)

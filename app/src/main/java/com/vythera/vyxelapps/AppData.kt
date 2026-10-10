@@ -1,6 +1,9 @@
 package com.vythera.vyxelapps
 
 import android.app.Application
+import com.vythera.vyxelapps.delta.DeltaApplier
+import com.vythera.vyxelapps.delta.DeltaPatchInfo
+import com.vythera.vyxelapps.delta.FileByFile
 import com.vythera.vyxelapps.api.AppEntry
 import com.vythera.vyxelapps.api.MetadataManager
 import com.vythera.vyxelapps.api.StoreUpdateChecker
@@ -139,6 +142,14 @@ data class GitHubRepo(
     val claimedSha256: String? = null,
     /** Source-claimed signing-certificate fingerprint -- same gating and same "null unless Zealot" posture as [claimedSha256]. */
     val claimedSigningFingerprint: String? = null,
+    /**
+     * Z-P13: the File-by-File update deltas Zealot publishes for this app's newest version, so an update can
+     * download only the delta and apply it to the installed APK instead of the whole file. `null` (not an
+     * empty list) for every source that publishes none -- six of the seven today, and a Zealot entry whose
+     * version carries no `delta_patches[]`. Empty-list-vs-null matters: `null` means "this source never had
+     * the concept", an empty list "the concept exists here but this version has no patch"; the update path
+     * treats both as "download the full APK". */
+    val deltaPatches: List<DeltaPatchInfo>? = null,
     /** `d.ii.zo`: real Android package identifier (e.g. `com.example.app`), when the source's own
      *  browse-time data actually carries one -- today that's F-Droid (`AppEntry`, source=fdroid),
      *  IzzyOnDroid, and Zealot only. `null` for GitHub/GitLab/Codeberg (git-hosting sources with no
@@ -4131,6 +4142,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             ?: repo.packageId.takeIf { it.isNotBlank() }
             ?: repo.full_name.takeIf { repo.source == AppSource.FDROID }
 
+    /**
+     * Z-P13: the installed version code of [pkg], or null when it is not installed or unreadable. The delta
+     * generator stamped each patch with the exact `from_version_code` it diffed, so the applier needs the
+     * build on the device to pick the right one. `longVersionCode` is API 28+; below that `versionCode`.
+     */
+    private fun installedVersionCode(pkg: String): String? = try {
+        val info = ctx.packageManager.getPackageInfo(pkg, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode.toString()
+        else @Suppress("DEPRECATION") info.versionCode.toString()
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * Z-P13: the installed APK's own file, to use as a delta base. `ApplicationInfo.sourceDir` is the base
+     * APK the package manager loaded the code from. Null when it cannot be read — then the update downloads
+     * the full APK instead.
+     */
+    private fun installedBaseApk(pkg: String): File? = try {
+        ctx.packageManager.getApplicationInfo(pkg, 0).sourceDir
+            ?.let { File(it).takeIf(File::isFile) }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * Z-P13 (card "**S** apply"): try to build the new APK by patching the installed base in place, returning
+     * the file it wrote, or null when the update must download the whole APK instead. Null is the answer for
+     * every "no" — no delta published for this build, no installed APK, no package identity, any checksum
+     * mismatch, a network or format error — because a full download is always correct and a bad patch is not.
+     * Never throws (an ordinary delta failure is a slower download, not an error the user should see); the
+     * caller's verification and install steps run on whichever file comes back, identically.
+     */
+    private suspend fun tryApplyDelta(repo: GitHubRepo, outFile: File): File? {
+        val patches = repo.deltaPatches ?: return null
+        val pkg = expectedPackageFor(repo) ?: return null
+        val installedCode = installedVersionCode(pkg) ?: return null
+        val patchInfo = DeltaApplier.selectPatch(patches, installedCode) ?: return null
+        val baseFile = installedBaseApk(pkg) ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                updateInstall(repo.id) { copy(downloadProgress = 0f, error = null, verification = null, repo = repo) }
+                val patchBytes = httpClient.newCall(Request.Builder().url(patchInfo.downloadUrl).build())
+                    .execute().use { resp ->
+                        if (!resp.isSuccessful) return@withContext null
+                        resp.body?.bytes() ?: return@withContext null
+                    }
+                val patched = DeltaApplier.applyPatch(
+                    installedBase       = baseFile.readBytes(),
+                    patchBytes          = patchBytes,
+                    expectedPatchSha256 = patchInfo.sha256,
+                    expectedFromSha256  = patchInfo.fromSha256,
+                    expectedToSha256    = patchInfo.toSha256,
+                )
+                outFile.writeBytes(patched)
+                outFile
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                null
+            }
+        }
+    }
+
     private fun launchSystemInstaller(file: File) {
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
         ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
@@ -4158,28 +4232,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             updateInstall(repo.id) { copy(downloadProgress = 0f, error = null, verification = null, repo = repo) }
             val outFile = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "${repo.name}_${asset.name}")
             try {
-                // Vyxel's own downloader rather than the system one.
-                //
-                // `android.app.DownloadManager` is always a single connection and
-                // offers no way to change that, and the mirrors here shape per
-                // connection — so a large APK arrived at a fraction of the link's
-                // real speed. This is the same segmented transfer the Expressive
-                // shell uses, so both shells now download at the same rate.
-                //
-                // Everything after the bytes land is unchanged: the signature check
-                // below still gates the installer, which is Classic's most important
-                // property and one the old path shared.
-                com.vythera.vyxelapps.expressive.install.FastDownloader.download(
-                    url = asset.browser_download_url,
-                    target = outFile,
-                    knownSize = asset.size,
-                ) { done, total ->
-                    if (total > 0) {
-                        updateInstall(repo.id) { copy(downloadProgress = done.toFloat() / total) }
+                // Z-P13: an update that has a File-by-File delta for the installed build patches in place,
+                // downloading only the delta, before falling through to the whole APK. The reconstructed file
+                // is byte-for-byte the new APK, so every check below (verification, installer) is unchanged.
+                // When there is no delta for this build — not installed, no patch published, any mismatch —
+                // this is null and the download below runs exactly as before.
+                val deltaFile = tryApplyDelta(repo, outFile)
+                if (deltaFile != null) {
+                    updateInstall(repo.id) { copy(downloadProgress = null, isVerifying = true) }
+                } else {
+                    // Vyxel's own downloader rather than the system one.
+                    //
+                    // `android.app.DownloadManager` is always a single connection and
+                    // offers no way to change that, and the mirrors here shape per
+                    // connection — so a large APK arrived at a fraction of the link's
+                    // real speed. This is the same segmented transfer the Expressive
+                    // shell uses, so both shells now download at the same rate.
+                    //
+                    // Everything after the bytes land is unchanged: the signature check
+                    // below still gates the installer, which is Classic's most important
+                    // property and one the old path shared.
+                    com.vythera.vyxelapps.expressive.install.FastDownloader.download(
+                        url = asset.browser_download_url,
+                        target = outFile,
+                        knownSize = asset.size,
+                    ) { done, total ->
+                        if (total > 0) {
+                            updateInstall(repo.id) { copy(downloadProgress = done.toFloat() / total) }
+                        }
                     }
+                    updateInstall(repo.id) { copy(downloadProgress = null, isVerifying = true) }
                 }
-
-                updateInstall(repo.id) { copy(downloadProgress = null, isVerifying = true) }
                 val check = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     ApkVerifier.verify(ctx, outFile, expectedPackageFor(repo))
                 }

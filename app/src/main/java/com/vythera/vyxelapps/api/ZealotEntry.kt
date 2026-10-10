@@ -1,6 +1,7 @@
 package com.vythera.vyxelapps.api
 
 import com.google.gson.Gson
+import com.vythera.vyxelapps.delta.DeltaPatchInfo
 import com.vythera.vyxelapps.AppSource
 import com.vythera.vyxelapps.GitHubRepo
 import com.vythera.vyxelapps.RepoOwner
@@ -35,6 +36,23 @@ const val ZEALOT_ID_OFFSET = 10_000_000_000L
 
 data class ZealotCompatibility(val min_sdk: Int? = null)
 
+/**
+ * Z-P13: one File-by-File update delta Zealot publishes per version (`delta_patches[]`, see
+ * `catalog_index_v2.schema.json`). `from_version_code` names the installed build this patch turns into the
+ * version it is carried on; `download_url` is Zealot's own stable endpoint (`GET
+ * /download/releases/:id/delta?from=<code>`), never a signed storage URL. The optional hashes let the
+ * client check its installed base before applying and the result after.
+ */
+data class ZealotDeltaPatch(
+    val from_version_code : String? = null,
+    val download_url      : String? = null,
+    val size              : Long?   = null,
+    val sha256            : String? = null,
+    val from_sha256       : String? = null,
+    val to_sha256         : String? = null,
+    val format            : String? = null
+)
+
 data class ZealotVersion(
     val version_name        : String?             = null,
     /** Task h.i.zi: the index publishes it as a STRING (`"42"`) or null; read only by `SelfUpdatePlanner`. Additive: a reader that never looks at it is unaffected. */
@@ -46,7 +64,15 @@ data class ZealotVersion(
     val size_bytes          : Long?                = null,
     val signing_fingerprint : String?             = null,
     val changelog           : String?             = null,
-    val compatibility       : ZealotCompatibility = ZealotCompatibility()
+    val compatibility       : ZealotCompatibility = ZealotCompatibility(),
+    /**
+     * Z-P13: the update deltas that reach this version. Absent (`null`) or empty for a version with none
+     * (a first release, an identical pair, a pulled previous build, or a deployment with delta patching
+     * off) — the client then downloads the full APK, always a correct answer. Nullable for the same reason
+     * every other field here is: Gson sets a field only when the key is present, so an older cached index
+     * without the key must read as `null`, not as a value. A reader that does not know the key ignores it.
+     */
+    val delta_patches       : List<ZealotDeltaPatch>? = null
 )
 
 data class ZealotPublisher(
@@ -170,6 +196,26 @@ fun ZealotEntry.toUnifiedRepo(): GitHubRepo {
         cdnVersion       = latest?.version_name ?: "",
         claimedSha256             = latest?.sha256,
         claimedSigningFingerprint = latest?.signing_fingerprint,
+        // Z-P13: carry the newest version's update deltas onto the unified card, so the update path can
+        // patch in place. Only a patch with both a real from-code and a plain-https URL is kept (a client
+        // would refuse to fetch anything else); if none survive, this is an empty list -- "the field exists,
+        // this version just has no usable patch" -- and the client falls back to the full APK.
+        deltaPatches              = latest?.delta_patches
+            ?.mapNotNull { patch ->
+                val code = patch.from_version_code?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val url = patch.download_url?.takeIf { it.startsWith("https://", ignoreCase = true) }
+                    ?: return@mapNotNull null
+                DeltaPatchInfo(
+                    fromVersionCode = code,
+                    downloadUrl     = url,
+                    size            = patch.size,
+                    sha256          = patch.sha256,
+                    fromSha256      = patch.from_sha256,
+                    toSha256        = patch.to_sha256,
+                    format          = patch.format,
+                )
+            }
+            ?.takeIf { it.isNotEmpty() },
         // d.ii.zo: Zealot's own `package_name` is a real Android package id -- the same identity
         // space `fdroid`/`izzy` populate `GitHubRepo.packageName` from -- and, unlike those two,
         // it's already passed through `1.a.ii.zi`'s signature verification by the time it gets here
