@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
+import com.vythera.vyxelapps.api.UpdateOwnershipRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -99,6 +100,7 @@ class ApkInstaller(private val context: Context) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     setInstallReason(android.content.pm.PackageManager.INSTALL_REASON_USER)
                 }
+                requestUpdateOwnership()
             }
 
             val sessionId = installer.createSession(params)
@@ -172,6 +174,16 @@ class ApkInstaller(private val context: Context) {
     }
 
     /**
+     * Task 47i: ask Android 14+ to make this store the app's update owner. Only takes effect on a first install
+     * (a no-op on an update), needs `ENFORCE_UPDATE_OWNERSHIP` in the manifest, and is best effort: if Android
+     * refuses the request the session carries on without ownership, because an install must never fail on it.
+     */
+    private fun PackageInstaller.SessionParams.requestUpdateOwnership() {
+        if (!UpdateOwnershipRules.shouldRequest(Build.VERSION.SDK_INT)) return
+        runCatching { if (Build.VERSION.SDK_INT >= 34) setRequestUpdateOwnership(true) }
+    }
+
+    /**
      * Installs a set of split APKs as one app, through a single session.
      *
      * Every split has to be written into the *same* session and committed together —
@@ -192,6 +204,7 @@ class ApkInstaller(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 setInstallReason(android.content.pm.PackageManager.INSTALL_REASON_USER)
             }
+            requestUpdateOwnership()
         }
 
         val sessionId = installer.createSession(params)
