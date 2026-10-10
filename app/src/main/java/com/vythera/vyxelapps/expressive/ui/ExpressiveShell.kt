@@ -162,6 +162,8 @@ fun ExpressiveShell(
     val rootChecking by viewModel.rootChecking.collectAsStateWithLifecycle()
     val moduleInstall by viewModel.moduleInstall.collectAsStateWithLifecycle()
     val extraResults by viewModel.extraResults.collectAsStateWithLifecycle()
+    // Z-P26: what each silent-install backend answered at the last probe.
+    val silentStatuses by viewModel.silentStatuses.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     val context = LocalContext.current
@@ -570,6 +572,15 @@ fun ExpressiveShell(
                     onClearCache = viewModel::clearDownloadCache,
                     contentPadding = contentPadding,
                     onCrashReporting = viewModel::setCrashReporting,
+                    onSilentInstall = viewModel::setSilentInstall,
+                    onSilentPinned = viewModel::setSilentInstallPinned,
+                    silentStatuses = silentStatuses,
+                    onRefreshSilent = viewModel::refreshSilentStatuses,
+                    onGrantSilent = { backend ->
+                        viewModel.requestSilentPermission(backend)
+                        viewModel.refreshSilentStatuses()
+                    },
+                    onSetupSilent = viewModel::openSilentSetup,
                     onSkin = viewModel::setSkin,
                     // Written straight into Classic's settings — the single store both
                     // shells read, so the glass looks the same on either side.

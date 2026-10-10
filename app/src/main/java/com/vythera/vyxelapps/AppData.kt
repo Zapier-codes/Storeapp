@@ -376,7 +376,12 @@ data class AppSettings(
     // Z-P17: the opt-in crash reporter. Off by default ("no telemetry by default").
     // Mirrored into the reporter's own SharedPreferences so the uncaught-exception
     // handler can read it synchronously (CrashReporter.setEnabled).
-    val crashReportingEnabled     : Boolean = false
+    val crashReportingEnabled     : Boolean = false,
+    // Z-P26: the opt-in silent-install switch. Off by default; when on, installs go through the
+    // highest-priority ready backend (Shizuku, Dhizuku, root) instead of Android's confirmation screen.
+    val silentInstallEnabled      : Boolean = false,
+    // Z-P26: when set, only that backend is used; empty means "any ready backend".
+    val silentInstallPinned       : String  = ""
 )
 
 // User-editable custom theme — accent is required, extra fields override auto-derived colors.
@@ -4303,6 +4308,48 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
 
+                // Z-P26: when a silent backend is ready and the person has switched silent installs on,
+                // run the install through it (a foreground service keeps it alive, a notification shows
+                // progress) instead of handing the file to Android, which would ask for confirmation.
+                val settingsNow = state.settings
+                val silentPlan = if (settingsNow.silentInstallEnabled) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val statuses = com.vythera.vyxelapps.silent.SilentInstallBackend.entries.associateWith {
+                            com.vythera.vyxelapps.silent.SilentInstaller.status(getApplication(), it)
+                        }
+                        val pinned = settingsNow.silentInstallPinned
+                            .takeIf { it.isNotBlank() }
+                            ?.let { name -> runCatching { com.vythera.vyxelapps.silent.SilentInstallBackend.valueOf(name) }.getOrNull() }
+                        com.vythera.vyxelapps.silent.SilentInstallRules.plan(true, pinned) {
+                            statuses[it] ?: com.vythera.vyxelapps.silent.SilentInstallStatus.Unknown
+                        }
+                    }
+                } else emptyList()
+
+                if (silentPlan.isNotEmpty()) {
+                    com.vythera.vyxelapps.silent.SilentInstallService.startInstall(
+                        context = ctx,
+                        apk = outFile,
+                        appId = repo.id.toString(),
+                        appName = repo.name,
+                        enabled = true,
+                        pinned = silentPlan.first(),
+                    )
+                    val tag0 = installStates[repo.id]?.release?.tag_name ?: "unknown"
+                    recordInstall(repo, tag0, outFile.absolutePath, pkg ?: "")
+                    if (pkg != null) {
+                        viewModelScope.launch {
+                            repeat(30) {
+                                delay(2000)
+                                if (installed(pkg)) { updateInstall(repo.id) { copy(isInstalled = true) }; return@launch }
+                            }
+                        }
+                    }
+                    return@launch
+                }
+
+                // The store's own silent-install service watches its own outcome; the Shizuku fast path
+                // below is the pre-existing one and is left exactly as it was.
                 if (ShizukuInstaller.isAvailable() && ShizukuInstaller.hasPermission()) {
                     ShizukuInstaller.install(ctx, outFile,
                         onSuccess = {

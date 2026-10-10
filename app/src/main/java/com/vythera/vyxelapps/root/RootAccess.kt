@@ -208,6 +208,50 @@ object RootAccess {
     suspend fun reboot(): Boolean = runShell("svc power reboot || reboot") != null
 
     /**
+     * Runs one command through `su` on a plain [Thread], for callers that are not on a coroutine (the
+     * silent-install engine's per-backend plumbing). [argv] is quoted, never interpolated, so a path
+     * with spaces or a `$` survives.
+     *
+     * Bounded by [timeoutMs]: a `su` prompt left open returns null rather than blocking the thread
+     * forever. Returns the combined stdout+stderr, or null when root was denied or timed out.
+     */
+    fun runCommand(argv: List<String>, timeoutMs: Long = 60_000L): String? {
+        val script = argv.joinToString(" ") { shellQuote(it) }
+        var process: Process? = null
+        return try {
+            process = ProcessBuilder("su").redirectErrorStream(true).start()
+            process.outputStream.bufferedWriter().use { writer ->
+                writer.write(script)
+                writer.newLine()
+                writer.write("exit")
+                writer.newLine()
+            }
+            val out = StringBuilder()
+            val reader = process.inputStream.bufferedReader()
+            val deadline = System.currentTimeMillis() + timeoutMs
+            val thread = Thread {
+                reader.forEachLine { out.appendLine(it) }
+            }
+            thread.start()
+            thread.join(maxOf(1L, deadline - System.currentTimeMillis()))
+            if (thread.isAlive) {
+                runCatching { process.destroy() }
+                null
+            } else {
+                out.toString()
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "root command failed: ${e.message}")
+            null
+        } finally {
+            runCatching { process?.destroy() }
+        }
+    }
+
+    /** Single-quoted so a path with spaces survives `sh -c`, with inner quotes escaped. */
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+    /**
      * Runs [script] through `su`, returning stdout, or null if root was denied,
      * unavailable, or took too long.
      *

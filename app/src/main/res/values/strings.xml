@@ -4,4 +4,12 @@
     <string name="widget_description">App of the Day and pending update count at a glance</string>
     <string name="widget_up_to_date">✓ All apps up to date</string>
     <string name="widget_updates_pending">%1$d update(s) pending — tap to update</string>
+
+    <!-- S-P3 managed-configuration keys, shown in a device policy controller's console (not in the app). -->
+    <string name="restriction_enabled_sources_title">Enabled sources</string>
+    <string name="restriction_enabled_sources_description">Which catalogue sources this store may show. Comma-separated names; blank leaves the person\'s own choice; \'none\' disables browsing.</string>
+    <string name="restriction_show_desktop_sources_title">Show desktop sources</string>
+    <string name="restriction_show_desktop_sources_description">Whether Linux and Windows sources appear. Unset leaves the person\'s own choice.</string>
+    <string name="restriction_hidden_packages_title">Hidden packages</string>
+    <string name="restriction_hidden_packages_description">Package names to hide everywhere. The person cannot un-hide these from inside the app.</string>
 </resources>

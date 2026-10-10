@@ -195,6 +195,9 @@ dependencies {
     implementation("io.github.kyant0:backdrop:2.0.0")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+    // Z-P26: Dhizuku's client API, so the store can drive Device-Owner-level silent installs through
+    // Dhizuku's shared owner process. MIT-licensed, published to Maven Central.
+    implementation("io.github.iamr0s:Dhizuku-API:2.5.3")
 
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 

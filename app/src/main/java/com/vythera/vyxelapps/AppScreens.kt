@@ -893,6 +893,23 @@ fun SettingsScreen(
     var backgroundSelfUpdate  by remember { mutableStateOf(settings.backgroundSelfUpdate) }
     // Z-P17: the opt-in crash reporter, off by default.
     var crashReporting        by remember { mutableStateOf(settings.crashReportingEnabled) }
+    // Z-P26: the opt-in silent-install switch and its pinned backend, off/unset by default.
+    var silentInstall         by remember { mutableStateOf(settings.silentInstallEnabled) }
+    var silentPinned          by remember { mutableStateOf(settings.silentInstallPinned) }
+    var silentStatuses        by remember {
+        mutableStateOf<Map<com.vythera.vyxelapps.silent.SilentInstallBackend, com.vythera.vyxelapps.silent.SilentInstallStatus>>(emptyMap())
+    }
+    val silentScope = rememberCoroutineScope()
+    val silentContext = LocalContext.current
+    fun probeSilent() {
+        silentScope.launch {
+            silentStatuses = com.vythera.vyxelapps.silent.SilentInstallBackend.entries.associateWith {
+                com.vythera.vyxelapps.silent.SilentInstaller.status(
+                    silentContext.applicationContext, it,
+                )
+            }
+        }
+    }
 
     fun currentSettings(tok: String = settings.githubToken) =
         settings.copy(
@@ -911,10 +928,12 @@ fun SettingsScreen(
             liquidGlassNavTextColor   = glassNavTextColorHex,
             showPreReleases           = showPreReleases,
             backgroundSelfUpdate      = backgroundSelfUpdate,
-            crashReportingEnabled     = crashReporting
+            crashReportingEnabled     = crashReporting,
+            silentInstallEnabled      = silentInstall,
+            silentInstallPinned       = silentPinned
         )
 
-    LaunchedEffect(themeMode, amoled, fontName, language, wallpaperUri, glassBlur, glassEdge, glassRefraction, glassNavBlur, glassNavEdge, glassNavRefraction, glassNavTextColorHex, showPreReleases, backgroundSelfUpdate, crashReporting) {
+    LaunchedEffect(themeMode, amoled, fontName, language, wallpaperUri, glassBlur, glassEdge, glassRefraction, glassNavBlur, glassNavEdge, glassNavRefraction, glassNavTextColorHex, showPreReleases, backgroundSelfUpdate, crashReporting, silentInstall, silentPinned) {
         onSave(currentSettings())
     }
 
@@ -2148,6 +2167,99 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Silent installs (Z-P26) ──────────────────────────────────
+            //
+            // One master switch and a row per backend. The store never downloads or bundles
+            // a backend: it drives the ones the phone already runs, each through that backend's
+            // own app (Set up / Grant) or, for root, through `su`. Everything here is opt-in —
+            // off by default — because installing without a confirmation screen hands the
+            // choice of what gets installed to the store, which the person should make on purpose.
+            Text(
+                "SILENT INSTALLS",
+                style         = MaterialTheme.typography.labelSmall,
+                fontWeight    = FontWeight.Bold,
+                color         = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp
+            )
+
+            GlassSettingsCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Install without asking",
+                                style      = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color      = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Uses a backend below to install and remove apps without Android's " +
+                                    "confirmation screen. Off by default.",
+                                style    = MaterialTheme.typography.bodySmall,
+                                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 17.sp
+                            )
+                        }
+                        Switch(
+                            checked         = silentInstall,
+                            onCheckedChange = {
+                                silentInstall = it
+                                if (it) probeSilent()
+                                onSave(currentSettings())
+                            }
+                        )
+                    }
+
+                    if (silentInstall) {
+                        Spacer(Modifier.height(12.dp))
+                        com.vythera.vyxelapps.silent.SilentInstallBackend.entries.forEach { backend ->
+                            SilentBackendRow(
+                                backend  = backend,
+                                status   = silentStatuses[backend],
+                                pinned   = silentPinned == backend.name,
+                                onPin    = { pin ->
+                                    silentPinned = if (pin) backend.name else ""
+                                    onSave(currentSettings())
+                                },
+                                onProbe  = { probeSilent() },
+                                onGrant  = {
+                                    com.vythera.vyxelapps.silent.SilentInstaller.requestPermission(
+                                        silentContext.applicationContext, backend,
+                                    )
+                                    silentScope.launch {
+                                        kotlinx.coroutines.delay(1500)
+                                        probeSilent()
+                                    }
+                                },
+                                onSetUp  = {
+                                    com.vythera.vyxelapps.silent.SilentInstallSetup.of(backend).packageName
+                                        ?.let { pkg ->
+                                            runCatching {
+                                                silentContext.packageManager.getLaunchIntentForPackage(pkg)?.let { launch ->
+                                                    launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    silentContext.startActivity(launch)
+                                                }
+                                            }
+                                        }
+                                },
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Nothing is downloaded here. Shizuku, Dhizuku and root are services you " +
+                                "set up yourself; Vyxel only borrows the access you grant it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+
             // ── Backup & Restore ─────────────────────────────────────────
             Text(
                 s.backupRestore,
@@ -2996,5 +3108,98 @@ fun formatTimeAgo(ts: Long): String {
         d < 3_600_000  -> "${d / 60_000}m ago"
         d < 86_400_000 -> "${d / 3_600_000}h ago"
         else           -> "${d / 86_400_000}d ago"
+    }
+}
+
+/**
+ * Z-P26: one silent-install backend in Classic's Settings — what it is, whether it is usable now, and
+ * the one action that moves it forward.
+ *
+ * The row never claims more than the probe saw. "Ready" is a filled check; "running but not granted" is
+ * a Grant button; "not here" is a Set up button that opens the backend's own app, or a Check button for
+ * root, which has no app to open. Ticking "Prefer" pins this backend so the store will not fall back to
+ * a different privilege the person did not choose.
+ */
+@androidx.compose.runtime.Composable
+private fun SilentBackendRow(
+    backend: com.vythera.vyxelapps.silent.SilentInstallBackend,
+    status: com.vythera.vyxelapps.silent.SilentInstallStatus?,
+    pinned: Boolean,
+    onPin: (Boolean) -> Unit,
+    onProbe: () -> Unit,
+    onGrant: () -> Unit,
+    onSetUp: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    backend.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (pinned) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "preferred",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Text(
+                when (status) {
+                    com.vythera.vyxelapps.silent.SilentInstallStatus.Ready -> "Ready — ${backend.authority}"
+                    com.vythera.vyxelapps.silent.SilentInstallStatus.Running -> "Running — permission not granted"
+                    com.vythera.vyxelapps.silent.SilentInstallStatus.NotInstalled -> "Not detected"
+                    else -> "Unknown"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        TextButton(onClick = { onPin(!pinned) }) {
+            Text(
+                if (pinned) "Unprefer" else "Prefer",
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+
+        when (status) {
+            com.vythera.vyxelapps.silent.SilentInstallStatus.Ready ->
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            com.vythera.vyxelapps.silent.SilentInstallStatus.Running ->
+                TextButton(onClick = onGrant) {
+                    Text("Grant", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
+            com.vythera.vyxelapps.silent.SilentInstallStatus.NotInstalled -> {
+                if (com.vythera.vyxelapps.silent.SilentInstallSetup.of(backend).packageName != null) {
+                    TextButton(onClick = onSetUp) {
+                        Text("Set up", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                } else {
+                    TextButton(onClick = onProbe) {
+                        Text("Check", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            else ->
+                TextButton(onClick = onProbe) {
+                    Text("Retry", style = MaterialTheme.typography.labelMedium)
+                }
+        }
     }
 }

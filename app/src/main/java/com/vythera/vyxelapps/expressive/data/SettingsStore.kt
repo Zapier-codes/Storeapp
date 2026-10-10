@@ -10,6 +10,7 @@ import com.vythera.vyxelapps.expressive.data.model.SourceId
 import com.vythera.vyxelapps.expressive.ui.theme.MotionIntensity
 import com.vythera.vyxelapps.expressive.ui.theme.ThemeMode
 import com.vythera.vyxelapps.expressive.ui.theme.VyxelSkin
+import com.vythera.vyxelapps.silent.SilentInstallBackend
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -44,6 +45,16 @@ data class Settings(
      * and it also needs a vitals token configured for the build to actually send anything.
      */
     val crashReportingEnabled: Boolean = false,
+    /**
+     * Z-P26: the opt-in silent-install switch. Off by default; when on, installs are driven through the
+     * highest-priority ready backend (Shizuku, Dhizuku, root) instead of Android's confirmation screen.
+     */
+    val silentInstallEnabled: Boolean = false,
+    /**
+     * Z-P26: when set, only this backend is used — the person chose it and the store must not silently
+     * draw on a different privilege. Null means "any ready backend, in the default order".
+     */
+    val silentInstallPinned: SilentInstallBackend? = null,
 )
 
 class SettingsStore(private val context: Context) {
@@ -59,6 +70,8 @@ class SettingsStore(private val context: Context) {
         val HIDDEN = stringSetPreferencesKey("hidden_packages")
         val INSTALLED_SORT = stringPreferencesKey("installed_sort")
         val CRASH_REPORTING = booleanPreferencesKey("crash_reporting")
+        val SILENT_INSTALL = booleanPreferencesKey("silent_install_enabled")
+        val SILENT_PINNED = stringPreferencesKey("silent_install_pinned")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { prefs ->
@@ -83,6 +96,9 @@ class SettingsStore(private val context: Context) {
                 ?: InstalledSort.Recent,
             crashReportingEnabled = prefs[Keys.CRASH_REPORTING]
                 ?: com.vythera.vyxelapps.crash.CrashReporter.isEnabled(context),
+            silentInstallEnabled = prefs[Keys.SILENT_INSTALL] ?: false,
+            silentInstallPinned = prefs[Keys.SILENT_PINNED]
+                ?.let { runCatching { SilentInstallBackend.valueOf(it) }.getOrNull() },
         )
     }
 
@@ -125,6 +141,16 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.CRASH_REPORTING] = enabled }
         com.vythera.vyxelapps.crash.CrashReporter.setEnabled(context, enabled)
     }
+
+    /** Z-P26: turn silent installs on/off. Off falls back to Android's confirmation screen. */
+    suspend fun setSilentInstall(enabled: Boolean) =
+        context.dataStore.edit { it[Keys.SILENT_INSTALL] = enabled }.let { }
+
+    /** Z-P26: pin one backend, or clear the pin (null = any ready backend). */
+    suspend fun setSilentInstallPinned(backend: SilentInstallBackend?) =
+        context.dataStore.edit { prefs ->
+            if (backend == null) prefs.remove(Keys.SILENT_PINNED) else prefs[Keys.SILENT_PINNED] = backend.name
+        }.let { }
 
     suspend fun toggleSource(source: SourceId, enabled: Boolean) {
         context.dataStore.edit { prefs ->

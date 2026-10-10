@@ -23,6 +23,11 @@ import com.vythera.vyxelapps.expressive.install.InstalledApp
 import com.vythera.vyxelapps.expressive.install.InstalledApps
 import com.vythera.vyxelapps.expressive.install.UpdateCandidate
 import com.vythera.vyxelapps.expressive.ui.components.InstallAction
+import com.vythera.vyxelapps.silent.SilentInstallBackend
+import com.vythera.vyxelapps.silent.SilentInstallRules
+import com.vythera.vyxelapps.silent.SilentInstallService
+import com.vythera.vyxelapps.silent.SilentInstallStatus
+import com.vythera.vyxelapps.silent.SilentInstaller
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -546,17 +551,20 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun install(item: AppItem) {
-        if (!installer.canRequestInstalls()) {
-            _snackbar.value = strings.snackEnableUnknownSources
-            runCatching {
-                val intent = installer.unknownSourcesIntent()
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                getApplication<Application>().startActivity(intent)
-            }
-            return
-        }
-
         viewModelScope.launch {
+            val silent = silentBackendReady()
+            // Z-P26: a silent backend runs `pm` itself, so it needs neither "install unknown apps" nor a
+            // confirmation screen. Only ask for the permission when there is no backend to do the install.
+            if (silent == null && !installer.canRequestInstalls()) {
+                _snackbar.value = strings.snackEnableUnknownSources
+                runCatching {
+                    val intent = installer.unknownSourcesIntent()
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    getApplication<Application>().startActivity(intent)
+                }
+                return@launch
+            }
+
             // A repo entry may not have its APK URL yet.
             val target = if (item.downloadUrl == null && item.needsReleaseLookup) {
                 runCatching { repository.resolve(item) }.getOrDefault(item)
@@ -589,6 +597,19 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
                 // the version that was actually installed rather than the stale one
                 // the card was showing.
                 pendingInstalls[item.id] = target to file.absolutePath
+                // Z-P26: hand off to the foreground service so a silent install survives the app being
+                // backgrounded; the outcome arrives on the same channel the session path uses below.
+                if (silent != null) {
+                    SilentInstallService.startInstall(
+                        context = getApplication(),
+                        apk = file,
+                        appId = item.id,
+                        appName = item.displayName,
+                        enabled = true,
+                        pinned = settings.value.silentInstallPinned,
+                    )
+                    return@launch
+                }
                 installer.install(file, item.id).onFailure { error ->
                     pendingInstalls.remove(item.id)
                     downloads.setState(
@@ -598,6 +619,23 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /**
+     * Z-P26: the backend a silent install would use right now, or null to mean "Android's installer".
+     *
+     * Returns null the moment the switch is off, and only ever names a backend [SilentInstallRules] would
+     * actually pick, so the install path and the Settings screen agree on what is available.
+     */
+    private suspend fun silentBackendReady(): SilentInstallBackend? {
+        val s = settings.value
+        if (!s.silentInstallEnabled) return null
+        val statuses = SilentInstallBackend.entries.associateWith {
+            SilentInstaller.status(getApplication(), it)
+        }
+        return SilentInstallRules.plan(s.silentInstallEnabled, s.silentInstallPinned) {
+            statuses[it] ?: SilentInstallStatus.Unknown
+        }.firstOrNull()
     }
 
     /**
@@ -616,7 +654,15 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         viewModelScope.launch {
-            val removedSilently = runCatching { installer.uninstall(pkg) }.getOrDefault(false)
+            // Z-P26: when silent installs are on, removal goes through any ready backend (Dhizuku or root
+            // included, not just Shizuku); otherwise the existing Shizuku fast path is all there is.
+            val s = settings.value
+            val removedSilently = if (s.silentInstallEnabled) {
+                runCatching { SilentInstaller.uninstall(getApplication(), pkg, enabled = true, pinned = s.silentInstallPinned) }
+                    .getOrDefault(false)
+            } else {
+                runCatching { installer.uninstall(pkg) }.getOrDefault(false)
+            }
             if (removedSilently) {
                 downloads.clear(item.id)
                 refreshInstalled()
@@ -923,6 +969,48 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     /** Z-P17: the opt-in crash reporter switch. */
     fun setCrashReporting(enabled: Boolean) =
         viewModelScope.launch { settingsStore.setCrashReporting(enabled) }
+
+    /** Z-P26: the silent-install switch. */
+    fun setSilentInstall(enabled: Boolean) =
+        viewModelScope.launch { settingsStore.setSilentInstall(enabled) }
+
+    /** Z-P26: pin one backend, or null to let any ready backend be used. */
+    fun setSilentInstallPinned(backend: SilentInstallBackend?) =
+        viewModelScope.launch { settingsStore.setSilentInstallPinned(backend) }
+
+    // Z-P26: what each silent-install backend answers right now, for the Settings card. Refreshed on
+    // demand (opening the card, granting a permission, returning from a backend's app), never polled —
+    // each probe touches another process, so doing it on a timer would be rude and wasteful.
+    private val _silentStatuses =
+        MutableStateFlow<Map<SilentInstallBackend, SilentInstallStatus>>(emptyMap())
+    val silentStatuses: StateFlow<Map<SilentInstallBackend, SilentInstallStatus>> = _silentStatuses.asStateFlow()
+
+    fun refreshSilentStatuses() {
+        viewModelScope.launch {
+            _silentStatuses.value = SilentInstallBackend.entries.associateWith {
+                SilentInstaller.status(getApplication(), it)
+            }
+        }
+    }
+
+    /** Z-P26: ask a backend for its permission (Shizuku/Dhizuku show their own dialog). */
+    fun requestSilentPermission(backend: SilentInstallBackend) {
+        SilentInstaller.requestPermission(getApplication(), backend)
+    }
+
+    /** Z-P26: open a backend's own app so the person can set it up, when it has one. */
+    fun openSilentSetup(backend: SilentInstallBackend) {
+        val setup = com.vythera.vyxelapps.silent.SilentInstallSetup.of(backend)
+        val pkg = setup.packageName ?: return
+        runCatching {
+            val intent = getApplication<Application>().packageManager
+                .getLaunchIntentForPackage(pkg)
+            if (intent != null) {
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                getApplication<Application>().startActivity(intent)
+            }
+        }
+    }
 
     fun toggleSource(source: SourceId, enabled: Boolean) =
         viewModelScope.launch {

@@ -83,6 +83,18 @@ fun SettingsScreen(
     contentPadding: PaddingValues,
     /** Z-P17: toggles the opt-in crash reporter. */
     onCrashReporting: (Boolean) -> Unit = {},
+    /** Z-P26: the opt-in silent-install switch. */
+    onSilentInstall: (Boolean) -> Unit = {},
+    /** Z-P26: pin one silent-install backend (null = any ready one). */
+    onSilentPinned: (com.vythera.vyxelapps.silent.SilentInstallBackend?) -> Unit = {},
+    /** Z-P26: what each backend answered at the last probe. */
+    silentStatuses: Map<com.vythera.vyxelapps.silent.SilentInstallBackend, com.vythera.vyxelapps.silent.SilentInstallStatus> = emptyMap(),
+    /** Z-P26: re-probe every backend. */
+    onRefreshSilent: () -> Unit = {},
+    /** Z-P26: ask a backend for its permission. */
+    onGrantSilent: (com.vythera.vyxelapps.silent.SilentInstallBackend) -> Unit = {},
+    /** Z-P26: open a backend's own app to set it up. */
+    onSetupSilent: (com.vythera.vyxelapps.silent.SilentInstallBackend) -> Unit = {},
     onSkin: (VyxelSkin) -> Unit = {},
     /**
      * Liquid Glass tuning, held in Classic's settings so both shells render the theme
@@ -517,6 +529,85 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        // ── Silent installs (Z-P26) ───────────────────────────────────────────
+        //
+        // The Shizuku card above covers one backend; this is the whole set — Shizuku, Dhizuku
+        // and root — behind a single opt-in switch. The store drives whichever is ready; it never
+        // downloads or bundles one. Everything is off until the person turns it on, because
+        // installing without a confirmation screen is a real change in what the app may do.
+        item(key = "silent_install") {
+            SettingsCard("Silent installs") {
+                ToggleRow(
+                    title = "Install without asking",
+                    subtitle = "Use Shizuku, Dhizuku or root to install and remove apps without Android's " +
+                        "confirmation screen. Off by default.",
+                    checked = settings.silentInstallEnabled,
+                    onCheckedChange = {
+                        onSilentInstall(it)
+                        if (it) onRefreshSilent()
+                    },
+                )
+                if (settings.silentInstallEnabled) {
+                    Spacer(Modifier.height(12.dp))
+                    com.vythera.vyxelapps.silent.SilentInstallBackend.entries.forEach { backend ->
+                        val status = silentStatuses[backend]
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = backend.label +
+                                        if (settings.silentInstallPinned == backend) "  ·  preferred" else "",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = when (status) {
+                                        com.vythera.vyxelapps.silent.SilentInstallStatus.Ready -> "Ready — ${backend.authority}"
+                                        com.vythera.vyxelapps.silent.SilentInstallStatus.Running -> "Running — permission not granted"
+                                        com.vythera.vyxelapps.silent.SilentInstallStatus.NotInstalled -> "Not detected"
+                                        else -> "Unknown"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            val isPinned = settings.silentInstallPinned == backend
+                            ActionPill(if (isPinned) "Unprefer" else "Prefer") {
+                                onSilentPinned(if (isPinned) null else backend)
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            when (status) {
+                                com.vythera.vyxelapps.silent.SilentInstallStatus.Ready -> Icon(
+                                    Icons.Filled.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                                com.vythera.vyxelapps.silent.SilentInstallStatus.Running ->
+                                    ActionPill("Grant") { onGrantSilent(backend) }
+                                com.vythera.vyxelapps.silent.SilentInstallStatus.NotInstalled -> {
+                                    if (com.vythera.vyxelapps.silent.SilentInstallSetup.of(backend).packageName != null) {
+                                        ActionPill("Set up") { onSetupSilent(backend) }
+                                    } else {
+                                        ActionPill("Check", onClick = onRefreshSilent)
+                                    }
+                                }
+                                else -> ActionPill("Retry", onClick = onRefreshSilent)
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    Text(
+                        text = "Nothing is downloaded here. Shizuku, Dhizuku and root are services you set " +
+                            "up yourself; Vyxel only borrows the access you grant it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 

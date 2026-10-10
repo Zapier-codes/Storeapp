@@ -11,24 +11,24 @@
          "none" = no sources. Unknown names are ignored. -->
     <restriction
         android:key="enabled_sources"
-        android:title="Enabled sources"
-        android:description="Which catalogue sources this store may show. Comma-separated names; blank leaves the person's own choice; 'none' disables browsing."
+        android:title="@string/restriction_enabled_sources_title"
+        android:description="@string/restriction_enabled_sources_description"
         android:restrictionType="string"
         android:defaultValue="" />
 
     <!-- true/false. Unset leaves the person's own choice. -->
     <restriction
         android:key="show_desktop_sources"
-        android:title="Show desktop sources"
-        android:description="Whether Linux and Windows sources appear. Unset leaves the person's own choice."
+        android:title="@string/restriction_show_desktop_sources_title"
+        android:description="@string/restriction_show_desktop_sources_description"
         android:restrictionType="bool" />
 
     <!-- Comma/space separated package names the store must always hide. The person cannot restore
          these in-app. -->
     <restriction
         android:key="hidden_packages"
-        android:title="Hidden packages"
-        android:description="Package names to hide everywhere. The person cannot un-hide these from inside the app."
+        android:title="@string/restriction_hidden_packages_title"
+        android:description="@string/restriction_hidden_packages_description"
         android:restrictionType="string"
         android:defaultValue="" />
 
