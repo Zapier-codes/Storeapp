@@ -1,13 +1,19 @@
-Vyxel Apps
-Copyright (C) 2026 YOUR_NAME (https://github.com/YOUR_USERNAME)
+Appstore
+Copyright (C) 2026 Zapier-codes
 
-This is the official source for Vyxel Apps.
-The only official APK distribution is at:
-  https://github.com/YOUR_USERNAME/vyxel-apps/releases
+This app is derived from Vyxel Apps by NikhilKain
+(https://github.com/NikhilKain/vyxel-apps), Copyright (C) 2026 Nikhil,
+licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+The full licence text is in LICENSE; the upstream copyright line is kept
+as that licence requires.
 
-Any other distribution claiming to be "Vyxel Apps" is unofficial
-and should not be trusted.
+This build is distributed from:
+  https://github.com/Zapier-codes/Storeapp/releases
 
-The official build is signed with the developer's keystore.
-You can verify the APK signature using:
+This app is free software: you may redistribute and/or modify it under the
+terms of the AGPL-3.0. It is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE for details.
+
+You can verify a build's APK signature using:
   apksigner verify --print-certs app-release.apk

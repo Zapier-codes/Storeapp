@@ -120,7 +120,7 @@ object SelfUpdateDownloadRules {
         }
     }
 
-    /** Parses `bytes 1000-31238329/31238330` (or `/*`); null for anything else, including a reversed range. */
+    /** Parses `bytes 1000-31238329/31238330` (or a star for the total); null for anything else, including a reversed range. */
     fun parseContentRange(header: String?): ContentRange? {
         val text = header?.trim() ?: return null
         val match = CONTENT_RANGE.matchEntire(text) ?: return null
