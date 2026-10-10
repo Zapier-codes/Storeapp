@@ -3,6 +3,8 @@
 
 ---
 
+**Operator-directed, 2026-10-10 (gap inventory; docs only, nothing run):** `docs/PLAY-PARITY.md` was extended with the Play Store **hamburger-menu** surfaces and the Play Console **billing / revenue** surfaces. Finding: the client's hamburger features that have an honest equivalent are already built (My apps & games = the installed list + Updates; notifications = FCM push; Play Protect = the on-install verify gate; settings), and the rest are Google-account or billing features with no honest equivalent for a free multi-source catalogue (`n/a`), or `port` when they merely wait on publisher data (content rating / parental filter). Nothing new was built this session; this is the inventory.
+
 ## 0. Cross-repo context
 
 This repo is the on-device client in the same program as `D-Store` (public storefront, Next.js) and `zealot` (the Console — Rails app, org signing, staged rollout, signed catalog index). D-Store's own `HANDOVER.md` tracks the cross-repo leaves below for visibility only, under its `6.a` track — those leaf IDs are referenced here so status stays addressable from either file, but *this* file is where the actual build checklist and status live.

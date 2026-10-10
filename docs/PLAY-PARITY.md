@@ -45,6 +45,17 @@ ViewModel), `AppComponents.kt` (detail/search wiring).
 | Ad-supported flags | port | Same as content rating: modelled on `AppListingMeta`, shown only when supplied. |
 | Download/Wi-Fi-only setting | have | `PreferencesManager.loadWifiOnlyDownloads` + `setWifiOnlyDownloads`. |
 | Device compatibility filter ("works on your device") | port | We already read `minSdk` from an installed APK; wiring it as a search facet needs the catalogue to carry `minSdk` per app (add to the Zealot/D-Store index). |
+| **My apps & games / Updates** (installed list, update-all) | have | Classic's `INSTALLED` tab and the Expressive Updates screen; `updateAll()` + `UpdateScanEngine`. Play's hamburger "My apps & games" maps to the same list. |
+| **Play Protect** ("scanning for harmful apps") | derived | The client verifies the SHA-256 checksum and signer continuity on every install (`Verifier`/`VerifierPolicy`) and refuses a mismatch or a downgrade. That is the honest analogue of Play Protect for a signed multi-source catalogue; there is no cloud "scan" and none is wanted. |
+| **Notifications / push** | have | `PushRegistrar` + FCM push; per-event notification preferences. |
+| **Account / sign-in** | n/a (by design) | This store has no account; installs and settings are device-local. Recorded so it is not re-opened as a gap. |
+| **Library / order history / purchase history** | n/a | Nothing is bought in an open-source catalogue, so there is no purchase history to show. |
+| **Subscriptions / in-app purchases / price** | n/a | No billing; the catalogue carries free releases only. |
+| **Redeem / offers / Play Points / gift cards / Google One** | n/a | Google's own account-and-rewards programmes; no honest equivalent. |
+| **Payment methods** | n/a | No user billing. |
+| **Parental controls / content filtering / family** | port | Could map to `content_rating` + an age filter, but the catalogue only carries a rating when the publisher supplies one, so the filter is gated on publisher data (same gate as the content-rating row). |
+| **Settings** (per-app auto-update, Wi-Fi-only, theme, language, backup) | have | `PlayLifecycleControls` + `PreferencesManager` + the Settings screen (Classic) / Settings tab (Expressive). |
+| **Country / language preference** | have (partial) | `language` setting plus per-shell label resolution. |
 
 ## 2. Play Console — publisher capabilities
 
@@ -66,10 +77,16 @@ does not re-open them.
 | Store listing experiments, store performance | n/a | Publisher analytics, not a client feature. |
 | **Developer page ownership** | have | `openDeveloper` groups the catalogue by owner login. |
 | Play App Signing / key rotation | n/a | Out of scope: multi-source, and the app verifies signer continuity on install instead. |
+| **Billing / payments (in-app purchases, subscriptions, pricing)** | n/a (client) | The catalogue is open-source; there is nothing to price or bill in the client. See Zealot's handover for the one money path the program does have (a publisher pays for a paid *store listing* through Hyperswitch) — a Console-side revenue feature, not a client one. |
+| **Revenue / earnings reporting, financial reports, payouts** | n/a (client) | Follows from the row above: no user billing means no earnings to report in an app. |
+| **App content / policy declarations** (Data safety, Content rating, Target audience, Ads, News) | have / port | Data safety `have` (`DataSafetyInfo` + `DataSafetyPanel`); content rating and ads are modelled and shown only when supplied; target audience and news app declarations are `port` (publisher forms). |
 
 ---
 
 ## 3. Porting notes
+
+> **Gap inventory (operator-directed 2026-10-10):** this table was extended with the Play Store **hamburger menu** surfaces and the Play Console **billing / revenue** surfaces the operator named. The finding, kept here so the next session does not re-derive it: the client's hamburger features that have an honest equivalent are already built (My apps & games = the installed list + Updates; notifications = FCM push; Play Protect = the on-install verify gate; settings); the ones that are Google-account or billing features (sign-in, subscriptions, library/order history, redeem/offers/Points, payment methods) are `n/a` on purpose because this catalogue has no accounts and no billing. The revenue half belongs to Zealot's console, not this client. See Zealot's `handover.md` for that side.
+
 
 The Play-parity work is split so the web storefront (`D-Store`) can carry the same
 surfaces. To port:
