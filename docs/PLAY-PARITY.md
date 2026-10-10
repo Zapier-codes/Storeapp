@@ -106,3 +106,87 @@ surfaces. To port:
    to the release metadata:
    `…/data/releases/github/{owner}/{name}.listing.json`. Absent is the normal case
    and must never be an error.
+
+
+---
+
+## 4. Full cross-check: Play Store against Appstore (operator-directed 2026-10-10; docs only, nothing built or run)
+
+Sections 1 to 3 above are the first pass. This section adds the embedded platform tools and the consumer / enterprise tags, and records the operating principles the operator set. The Console half is Zealot's `docs/PLAY-PARITY.md`; the web mirror is D-Store's.
+
+## Operating principles for closing every gap *(operator directive, 2026-10-10)*
+
+1. **Human steps are automated.** Anywhere Play puts a person in the loop (app review, policy decisions, content-rating questionnaires, appeals triage, support routing), this program builds an automated decision instead: a machine verdict with machine-readable reasons (pass, flag, reject), recorded on the release. A person is only the exception path (an appeal, or a verdict the automation marks as high risk), never a queue that publishing waits on. Existing rules stand: an update to an app that already has a previous version is never held (Zealot Task 48/49).
+2. **Reviews are anonymous. No accounts, ever.** The intended design (not built; its own task, cut by the TSF before code): a device-bound pseudonymous key made on the phone (Android Keystore), one editable review per key per app, a proof-of-work challenge instead of a captcha service, rate limits per key and per network, automated moderation, and a visible "verified install" mark when the review came from the Appstore client with proof that the reviewed version was installed. The website accepts the same review with the proof-of-work token and no install mark. Developer replies are public. There is no sign-in, no email and no profile anywhere in this path.
+3. **Everything else follows the industry-standard approach**, as the earlier decision records (D43-n, 47h and the rest) already do, and keeps this program's own intended approaches where a handover has recorded one (additive-only sources, signed catalog index, org signing key, CI signs everything, no telemetry by default).
+4. **Reuse before writing.** Most missing areas already exist as open-source parts that can be assembled. The reuse map below lists them with a mark: **✓** = the project's own page was read in a search on 2026-10-10; **◇** = from the author's knowledge, not checked, so check licence and maintenance before adopting. Nothing in the map is adopted yet.
+5. **Unofficial routes carry a stated risk.** A route that depends on a reverse-engineered or unpublished interface is listed with that risk, and is never the only path to a feature.
+
+
+Key: ✅ have · ◐ partial · ❌ missing · ➖ not applicable by design · ❓ not confirmed in any handover. **C** = consumer, **E** = enterprise.
+
+| Feature, including embedded platform tools | Tag | Play | Appstore |
+|---|---|---|---|
+| Browse, search, details, screenshots, changelog | C | ✅ | ✅ |
+| Install, update, uninstall through PackageInstaller sessions | C | ✅ | ✅ |
+| Per-app auto-update, Wi-Fi-only downloads | C | ✅ | ✅ |
+| Background update checks for every source | C | ✅ | ◐ (Zealot path only; the other six sources have the gap) |
+| Update ownership (Android 14) | C | ✅ | ◐ (best effort, not yet verified on a device) |
+| Delta or patch updates | C | ✅ | ❌ |
+| Split APKs and dynamic delivery (config splits per device) | C | ✅ | ❌ (serves a universal APK) |
+| Asset packs (install-time, fast-follow, on-demand) | C | ✅ | ❌ in the client |
+| Resumable downloads | C | ✅ | ◐ (website proxy yes, client ❓) |
+| Download queue: pause, cancel, retry, storage check | C | ✅ | ❌ |
+| Pre-register / early access | C | ✅ | ✅ |
+| Read ratings and reviews | C | ✅ | ✅ |
+| Write reviews, helpful votes, report a review, filter by device | C | ✅ | ❌ (anonymous design, principle 2) |
+| Data Safety panel | C | ✅ | ✅ |
+| Content rating, age filter, parental controls | C | ✅ | ❌ (port; waits on Zealot's declarations) |
+| Device compatibility filter ("works on your device") | C | ✅ | ❌ |
+| Form-factor stores (tablet, TV, Wear, Auto) | C | ✅ | ❌ |
+| Wishlist or save for later | C | ✅ | ❌ |
+| Top charts, categories, Kids tab, editorial stories | C | ✅ | ◐ (collections and sponsored slots only) |
+| Search suggestions, voice search | C | ✅ | ❓ |
+| Verify checksum and signer on every install | C | ✅ | ✅ (the Play Protect analogue) |
+| Cloud malware scanning, live threat detection | C | ✅ | ❌ (not matchable; replaced by Zealot's automated scan, see Zealot's doc) |
+| Report or flag an app | C | ✅ | ◐ (website yes, client ❓) |
+| Share an app | C | ✅ | ◐ |
+| Push notifications | C | ✅ | ✅ |
+| Archive unused apps, storage management | C | ✅ | ❌ |
+| Android developer verification (a registered developer behind every installed app) | C/E | ✅ | ❌ |
+| In-App Updates API (an app updates itself) | C | ✅ | ✅ (Zealot Task 47 updater) |
+| In-App Review API | C | ✅ | ❌ (becomes the anonymous review path) |
+| Install Referrer and deferred deep links | C | ✅ | ❌ |
+| Play Integrity API (device and app attestation) | C/E | ✅ | ➖ (Android key attestation covers the anonymous-review need) |
+| Play Billing, subscriptions, Play Pass, Points, gift cards | C | ✅ | ➖ |
+| Accounts, library, order history, payment methods, Family Library | C | ✅ | ➖ |
+| Instant apps, Play Games Services | C | ✅ | ➖ |
+| Remote install to other devices | C | ✅ | ➖ (needs accounts) |
+| Private apps for one organization | E | ✅ | ◐ (white-label tenants, per-tenant catalog) |
+| Per-organization curated store layout | E | ✅ | ◐ (collections exist, tenant scope in progress) |
+| MDM/EMM integration (Android Management API, Play EMM API) | E | ✅ | ❌ |
+| Managed configurations (app restrictions pushed by IT) | E | ✅ | ❌ |
+| Forced, silent or allow-listed installs through a device policy controller | E | ✅ | ❌ (Shizuku and root are off by default, blocked on decision (b)) |
+| Work profile support | E | ✅ | ❌ |
+| Admin approval of apps and permissions for an organization | E | ✅ | ❌ |
+
+
+## Reuse map: client and storefront side (assemble, do not write from scratch)
+
+**✓** = the project's own page was read in a search on 2026-10-10. **◇** = from the author's knowledge, not checked. Nothing here is adopted yet; each adoption is its own task, cut by the TSF before code. The Console-side half, with the same marks, is in Zealot's `docs/PLAY-PARITY.md`.
+
+| Gap | Route | Mark | Note |
+|---|---|---|---|
+| Split APKs and dynamic delivery | **bundletool** builds device-specific APK sets from a bundle; Zealot's CI already runs bundletool for the universal APK. The client installs several APKs in one PackageInstaller session (the session code from leaf h.iii is the base). AppManager and SAI are open-source references for split installs | bundletool ✓ (used in Zealot CI per its handover); AppManager, SAI ◇ | Needs Zealot to publish per-device sets, or the client to send its device spec |
+| Delta updates | **archive-patcher** client side: apply the patch to the installed base APK, check the result byte for byte, then SHA-256 and signer as today | ✓ android-developers.googleblog.com/2016/12/saving-data-reducing-the-size-of-app-updates-by-65-percent.html | Zealot makes the patch (see its doc) |
+| Download queue | WorkManager with a resumable downloader; Aurora Store uses Fetch2 for the same job | Fetch2 ✓ (named in Aurora's page); WorkManager ◇ | |
+| Managed configuration and silent installs for organizations | The client reads standard **app restrictions** (RestrictionsManager), so any device policy controller, Headwind MDM included, can configure it; Shizuku or Dhizuku for silent installs, behind `InstallGateway` and `Verifier`, off by default | RestrictionsManager and Headwind ✓; Shizuku, Dhizuku ◇ | Unblocks `j.x` once decision (b) is made |
+| Anonymous reviews (client) | Key pair in the Android Keystore with **key attestation**, one editable review per key per app, proof of install of that version, proof-of-work token; the website uses **ALTCHA** | ALTCHA ✓ altcha.org/open-source-captcha/; Key Attestation ◇ | Principle 2 |
+| Search suggestions | Postgres `pg_trgm` (D-Store already uses Supabase), or Meilisearch or Typesense; voice search is Android's SpeechRecognizer | ◇ | |
+| Push without Google | UnifiedPush beside FCM | ◇ | For de-Googled devices |
+| Reading F-Droid-format repos | **F-Droid index-v2** is a documented, signed format; Appstore already has F-Droid and IzzyOnDroid sources | ✓ f-droid.org/docs/All_our_APIs/ | |
+| Update tracking across sources | **Obtainium** is the reference for multi-source update tracking; its app configurations are importable JSON ◇ | named in the verification coverage ✓; details ◇ | |
+| Developer verification for the store itself | Register Appstore (`com.vythera.vyxelapps`) in Google's program, as Accrescent did | ✓ blog.accrescent.app/posts/android-developer-verification/ | Enforced from 2026-09-30 in Brazil, Indonesia, Singapore and Thailand; global in 2027 |
+| Install referrer | No standard outside Play; design as its own task (a signed parameter on the download URL read on first launch) | ◇ | |
+
+**Unofficial routes that exist, and why they are not the plan.** Aurora Store (GPL-3.0) and gplaydl reach Google Play through a reverse-engineered interface and a shared anonymous-token dispenser. Their own pages warn it can break and is unreliable. It is outside Google's terms and GPL-3.0 code cannot simply be folded into this app. Recorded so it is not re-discovered as a shortcut.
